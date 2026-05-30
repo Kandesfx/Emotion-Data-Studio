@@ -1,0 +1,68 @@
+# ============================================================
+# Cloud Run — Cloud Build Configuration
+# ============================================================
+# Trigger: push to main branch or manual trigger
+#
+# gcloud builds submit --config deploy/cloudbuild.yaml .
+# ============================================================
+
+steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:latest'
+      - '-f'
+      - 'deploy/Dockerfile'
+      - '.'
+
+  # Step 2: Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:$SHORT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:latest'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'emotion-data-studio-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:$SHORT_SHA'
+      - '--region'
+      - 'asia-southeast1'
+      - '--platform'
+      - 'managed'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300'
+      - '--max-instances'
+      - '3'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'ENV=production,EDS_DATA_DIR=/app/data'
+      - '--add-cloudsql-instances'
+      - '${_CLOUD_SQL_INSTANCE}'
+
+substitutions:
+  _CLOUD_SQL_INSTANCE: 'your-project:asia-southeast1:eds-postgres'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/emotion-data-studio-api:latest'

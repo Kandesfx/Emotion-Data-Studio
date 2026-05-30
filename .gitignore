@@ -1,0 +1,50 @@
+# ============================================================
+# Emotion Data Studio — .gitignore
+# ============================================================
+
+# Data & Database
+data/*.db
+data/videos/
+data/clips/
+data/frames/
+data/audio/
+data/transcripts/
+data/exports/
+data/models_cache/
+
+# Logs
+logs/
+*.log
+
+# Build output
+dist/
+build/pyinstaller_work/
+installer/output/
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+
+# Environment
+.env
+.env.local
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary
+*.tmp

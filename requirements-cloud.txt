@@ -1,0 +1,29 @@
+# ============================================================
+# Cloud Run API — Requirements (minimal)
+# ============================================================
+# Only includes packages needed for the REST API server,
+# NOT the full desktop application.
+# ============================================================
+
+# Web Framework
+fastapi>=0.110.0
+uvicorn>=0.28.0
+pydantic-settings>=2.2.0
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9       # PostgreSQL driver for Cloud SQL
+
+# Google Cloud
+google-cloud-storage>=2.14.0
+google-cloud-sql-connector>=1.0.0
+cloud-sql-python-connector[pg8000]>=1.0.0
+pg8000>=1.30.0
+
+# Data processing (lightweight)
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Utilities
+tqdm>=4.65.0
