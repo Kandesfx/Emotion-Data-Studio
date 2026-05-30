@@ -257,7 +257,10 @@ class DashboardPage(QWidget):
         """Start the AI pipeline in a background thread"""
         from ui.workers.pipeline_worker import PipelineWorker
 
-        self._worker = PipelineWorker(url, movie_name)
+        self._worker = PipelineWorker(
+            video_url=url,
+            movie_name=movie_name
+        )
         self._worker.pipeline_finished.connect(self._on_pipeline_finished)
         self._worker.error_occurred.connect(self._on_pipeline_error)
         self._worker.start()
