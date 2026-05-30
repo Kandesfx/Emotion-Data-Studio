@@ -535,7 +535,7 @@ QProgressBar {
     min-height: 8px;
     max-height: 8px;
     text-align: center;
-    font-size: 0px;
+    font-size: 1px;  /* Hide text — use 1px instead of 0px to avoid QFont::setPixelSize warning */
 }
 
 QProgressBar::chunk {
