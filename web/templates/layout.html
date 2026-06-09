@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{PAGE_TITLE}} — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+
+    <div class="nav-items">
+      <a href="/" class="nav-item {{'active' if PAGE == 'dashboard' else ''}}">
+        <i data-feather="bar-chart-2"></i>
+        <span>Bảng Điều Khiển</span>
+      </a>
+      <a href="/review" class="nav-item {{'active' if PAGE == 'review' else ''}}">
+        <i data-feather="eye"></i>
+        <span>Kiểm Duyệt</span>
+      </a>
+      <a href="/harvest" class="nav-item {{'active' if PAGE == 'harvest' else ''}}">
+        <i data-feather="download"></i>
+        <span>Thu Hoạch</span>
+      </a>
+      <a href="/settings" class="nav-item {{'active' if PAGE == 'settings' else ''}}">
+        <i data-feather="sliders"></i>
+        <span>Cài Đặt</span>
+      </a>
+      <a href="/export" class="nav-item {{'active' if PAGE == 'export' else ''}}">
+        <i data-feather="package"></i>
+        <span>Xuất Dữ Liệu</span>
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="gpu-status" id="gpuStatus">
+        <i data-feather="cpu"></i>
+        <span id="gpuLabel">Đang kiểm tra...</span>
+      </div>
+      <div class="sync-status">
+        <i data-feather="cloud"></i>
+        <span>Cloud: <span id="cloudStatus">--</span></span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">{{PAGE_TITLE}}</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" id="refreshBtn" title="Làm mới">
+          <i data-feather="refresh-cw"></i>
+        </button>
+        <div class="topbar-badge" id="queueBadge">
+          <i data-feather="clock"></i>
+          <span id="queueCount">--</span> chờ
+        </div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      {{PAGE_CONTENT}}
+    </div>
+  </main>
+</div>
+
+<script>
+  // Replace all feather icons
+  feather.replace();
+
+  // Auto-refresh on page load
+  document.getElementById('refreshBtn').addEventListener('click', () => location.reload());
+
+  // Check GPU status
+  fetch('/health')
+    .then(r => r.json())
+    .then(data => {
+      const label = document.getElementById('gpuLabel');
+      if (data.gpu && data.gpu !== 'Unknown') {
+        label.textContent = data.gpu + ' ' + data.gpu_memory_gb + 'GB';
+        label.style.color = '#10b981';
+      } else {
+        label.textContent = 'Không có GPU';
+        label.style.color = '#f59e0b';
+      }
+    })
+    .catch(() => {
+      document.getElementById('gpuLabel').textContent = 'Lỗi kết nối';
+    });
+
+  // Fetch queue count
+  fetch('/api/queue')
+    .then(r => r.json())
+    .then(data => {
+      const pending = (data.items || []).filter(i => i.status === 'pending').length;
+      document.getElementById('queueCount').textContent = pending;
+    })
+    .catch(() => {});
+</script>
+
+</body>
+</html>

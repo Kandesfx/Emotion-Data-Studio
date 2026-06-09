@@ -23,6 +23,8 @@ a = Analysis(
         # UI styles & resources
         (os.path.join(PROJECT_ROOT, 'ui', 'styles', 'dark_theme.qss'), os.path.join('ui', 'styles')),
         (os.path.join(PROJECT_ROOT, 'ui', 'styles', 'theme.py'), os.path.join('ui', 'styles')),
+        # UI assets (logo GIF, icons)
+        (os.path.join(PROJECT_ROOT, 'ui', 'assets'), 'ui/assets'),
         # Backend source (needed for imports)
         (os.path.join(PROJECT_ROOT, 'backend'), 'backend'),
     ],
@@ -54,24 +56,25 @@ a = Analysis(
         # UI modules
         'ui',
         'ui.main_window',
+        'ui.updater',
+        'ui.splash_screen',
         'ui.pages',
         'ui.pages.dashboard_page',
         'ui.pages.processing_page',
+        'ui.pages.segment_editor_page',
         'ui.pages.review_page',
         'ui.pages.export_page',
         'ui.widgets',
         'ui.widgets.sidebar',
         'ui.workers',
         'ui.workers.pipeline_worker',
+        'ui.workers.segment_worker',
         'ui.workers.export_worker',
         'ui.styles',
         'ui.styles.theme',
         # Pydantic
         'pydantic',
         'pydantic_settings',
-        # ML libraries (optional — loaded at runtime)
-        'sklearn',
-        'sklearn.model_selection',
     ],
     hookspath=[],
     hooksconfig={},
@@ -87,6 +90,15 @@ a = Analysis(
         'deepface',
         'insightface',
         'mediapipe',
+        # Exclude other heavy and unused packages
+        'pyarrow',
+        'boto3',
+        'botocore',
+        'matplotlib',
+        'seaborn',
+        'scipy',
+        'pandas',
+        'sklearn',
         # Exclude server-only packages
         'fastapi',
         'uvicorn',

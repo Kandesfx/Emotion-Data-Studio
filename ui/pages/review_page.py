@@ -1,664 +1,1362 @@
 """
-Emotion Data Studio — Review & Labeling Studio Page
-=====================================================
-The core review interface with:
-  - Video player (QMediaPlayer)
-  - AI prediction panel (scores, model breakdown)
-  - Transcript display
-  - Emotion label buttons (keyboard shortcuts)
-  - Filter bar (status, emotion, confidence)
-  - Clip navigation (prev/next)
+Emotion Data Studio - Review Workspace
+
+A professional NLE-style review surface:
+- left media bin / clip queue
+- center preview monitor + timeline strip
+- right inspector for AI prediction, transcript, labels and notes
 """
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSplitter, QComboBox, QCheckBox, QScrollArea,
-    QSizePolicy, QProgressBar, QPlainTextEdit, QMessageBox
+from __future__ import annotations
+
+import os
+import json
+from datetime import datetime
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QUrl, Slot, Signal, QRectF, QPointF
+from PySide6.QtGui import (
+    QKeySequence,
+    QShortcut,
+    QPainter,
+    QPen,
+    QBrush,
+    QFont,
+    QColor,
+    QPolygonF,
+    QMouseEvent,
+    QPaintEvent,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QUrl, QTimer
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QSplitter,
+    QComboBox,
+    QCheckBox,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPlainTextEdit,
+    QProgressBar,
+    QMessageBox,
+    QSlider,
+    QSizePolicy,
+    QScrollArea,
+    QApplication,
+)
 
-from ui.styles.theme import Colors, EMOTION_MAP
+from ui.styles.theme import EMOTION_MAP, Colors
 
 
-class AIScoreBar(QFrame):
-    """Single model score display with progress bar"""
 
-    def __init__(self, model_name: str, parent=None):
+class ClipListItem(QListWidgetItem):
+    """List item that stores a clip dict."""
+
+    def __init__(self, clip: dict):
+        label = clip.get("display_name") or f"Clip {clip.get('clip_index', 0):03d}"
+        status = clip.get("status") or "pending"
+        emotion = clip.get("user_emotion") or clip.get("ai_emotion") or "unknown"
+        super().__init__(f"{label}\n{status} | {emotion} | {clip.get('duration', 0):.1f}s")
+        self.clip = clip
+        self.setToolTip(clip.get("clip_path") or "")
+
+
+class ScoreRow(QFrame):
+    """Compact score row for inspector."""
+
+    def __init__(self, label: str, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
         layout.setSpacing(8)
-
-        self.name_label = QLabel(model_name)
-        self.name_label.setObjectName("statLabel")
-        self.name_label.setFixedWidth(80)
-        layout.addWidget(self.name_label)
-
-        self.emotion_label = QLabel("—")
-        self.emotion_label.setFixedWidth(60)
-        layout.addWidget(self.emotion_label)
-
+        self.label = QLabel(label)
+        self.label.setFixedWidth(100)
+        self.label.setObjectName("statLabel")
+        layout.addWidget(self.label)
         self.progress = QProgressBar()
         self.progress.setMinimum(0)
         self.progress.setMaximum(100)
-        self.progress.setValue(0)
         layout.addWidget(self.progress, stretch=1)
-
-        self.conf_label = QLabel("0%")
-        self.conf_label.setFixedWidth(40)
-        self.conf_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(self.conf_label)
-
-    def set_score(self, emotion: str, confidence: float):
-        """Update model score"""
-        emoji = EMOTION_MAP.get(emotion, {}).get("emoji", "❓")
-        self.emotion_label.setText(f"{emoji} {emotion}")
-        pct = int(confidence * 100)
-        self.progress.setValue(pct)
-        self.conf_label.setText(f"{pct}%")
-
-
-class EmotionScoreBar(QFrame):
-    """Emotion score bar for the distribution chart"""
-
-    def __init__(self, emotion_key: str, parent=None):
-        super().__init__(parent)
-        info = EMOTION_MAP.get(emotion_key, {})
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 1, 0, 1)
-        layout.setSpacing(8)
-
-        label_text = f"{info.get('emoji', '❓')} {info.get('label', emotion_key)}"
-        self.name_label = QLabel(label_text)
-        self.name_label.setFixedWidth(110)
-        self.name_label.setObjectName("statLabel")
-        layout.addWidget(self.name_label)
-
-        self.progress = QProgressBar()
-        self.progress.setMinimum(0)
-        self.progress.setMaximum(100)
-        self.progress.setValue(0)
-        color = info.get("color", "#6c5ce7")
-        self.progress.setStyleSheet(f"""
-            QProgressBar::chunk {{
-                background: {color};
-                border-radius: 4px;
-            }}
-        """)
-        layout.addWidget(self.progress, stretch=1)
-
-        self.pct_label = QLabel("0%")
-        self.pct_label.setFixedWidth(40)
-        self.pct_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(self.pct_label)
+        self.value = QLabel("0%")
+        self.value.setFixedWidth(44)
+        self.value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self.value)
 
     def set_score(self, score: float):
-        pct = int(score * 100)
+        pct = max(0, min(100, int((score or 0) * 100)))
         self.progress.setValue(pct)
-        self.pct_label.setText(f"{pct}%")
+        self.value.setText(f"{pct}%")
 
 
-class ReviewPage(QWidget):
-    """Review & Labeling Studio — main review interface"""
+class ClipTimelineBar(QWidget):
+    """Adobe Premiere-style timeline: shows all clips as colored segments,
+    current position as playhead, click/drag to select clip + seek."""
+
+    clip_selected = Signal(int)  # emits clip index when user clicks/selects a segment
+    seek_requested = Signal(int)  # emits absolute ms position when user drags/clicks
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._clips = []           # List of clip data dicts
-        self._current_index = 0    # Current clip index
-        self._current_clip = None  # Current clip data
+        self._clips: list[dict] = []
+        self._total_duration_ms = 0
+        self._current_index = -1
+        self._playhead_position_ms = 0
+        self._is_scrubbing = False
 
+        self.setFixedHeight(95)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMouseTracking(True)
+
+    def set_clips(self, clips: list[dict], total_duration_ms: int):
+        self._clips = clips
+        self._total_duration_ms = total_duration_ms
+        self.update()
+
+    def set_current_clip(self, index: int):
+        if 0 <= index < len(self._clips):
+            self._current_index = index
+            self.update()
+
+    def set_playhead_position(self, position_ms: int):
+        if not self._is_scrubbing:
+            self._playhead_position_ms = max(0, min(self._total_duration_ms, position_ms))
+            self.update()
+
+    def is_scrubbing(self) -> bool:
+        return self._is_scrubbing
+
+    def clear(self):
+        self._clips = []
+        self._total_duration_ms = 0
+        self._current_index = -1
+        self._playhead_position_ms = 0
+        self._is_scrubbing = False
+        self.update()
+
+    def time_to_x(self, time_ms: int) -> float:
+        if self._total_duration_ms <= 0:
+            return 0
+        return (time_ms / self._total_duration_ms) * self.width()
+
+    def x_to_time(self, x: float) -> int:
+        if self.width() <= 0:
+            return 0
+        pct = max(0.0, min(1.0, x / self.width()))
+        return int(pct * self._total_duration_ms)
+
+    def paintEvent(self, event: QPaintEvent):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+
+        # 1. Background
+        painter.fillRect(0, 0, w, h, QBrush(QColor("#0d0d15")))
+
+        # Border
+        pen = QPen(QColor("rgba(255, 255, 255, 0.08)"), 1)
+        painter.setPen(pen)
+        painter.drawRect(0, 0, w - 1, h - 1)
+
+        # Ruler Area Background (top 20px)
+        painter.fillRect(0, 0, w, 20, QBrush(QColor("#09090f")))
+        painter.setPen(QPen(QColor("rgba(255, 255, 255, 0.06)"), 1))
+        painter.drawLine(0, 20, w, 20)
+
+        # Draw Ruler Ticks
+        if self._total_duration_ms > 0:
+            painter.setPen(QPen(QColor("rgba(255, 255, 255, 0.2)"), 1))
+            font = QFont("Inter", 8)
+            painter.setFont(font)
+
+            total_sec = self._total_duration_ms / 1000.0
+            tick_interval_sec = 5.0
+            if total_sec > 120:
+                tick_interval_sec = 20.0
+            elif total_sec > 60:
+                tick_interval_sec = 10.0
+            elif total_sec < 15:
+                tick_interval_sec = 2.0
+
+            num_ticks = int(total_sec / tick_interval_sec)
+            for i in range(num_ticks + 1):
+                sec = i * tick_interval_sec
+                x = (sec * 1000 / self._total_duration_ms) * w
+                painter.drawLine(QPointF(x, 12), QPointF(x, 20))
+
+                m = int(sec // 60)
+                s = int(sec % 60)
+                time_str = f"{m:02d}:{s:02d}"
+                rect = QRectF(x - 20, 0, 40, 12)
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, time_str)
+
+        # 2. Clips Track
+        if self._total_duration_ms > 0:
+            track_y = 23
+            track_h = h - track_y - 6
+
+            for idx, clip in enumerate(self._clips):
+                start = clip.get("start_time", 0) * 1000
+                end = clip.get("end_time", 0) * 1000
+
+                x_start = (start / self._total_duration_ms) * w
+                x_end = (end / self._total_duration_ms) * w
+                clip_w = max(2.0, x_end - x_start)
+
+                status = clip.get("status", "pending")
+                is_selected = (idx == self._current_index)
+
+                # Determine colors based on status
+                if status == "approved":
+                    base_color = QColor("#00b894")  # Green
+                    alpha = 210 if is_selected else 90
+                elif status == "rejected":
+                    base_color = QColor("#e17055")  # Red/orange
+                    alpha = 210 if is_selected else 90
+                else:
+                    # Pending/Needs Review/AI Labeled -> Grayish/Subtle Purple
+                    base_color = QColor("#6c5ce7") if is_selected else QColor(100, 100, 110)
+                    alpha = 140 if is_selected else 40
+
+                fill_color = QColor(base_color)
+                fill_color.setAlpha(alpha)
+
+                clip_rect = QRectF(x_start, track_y, clip_w, track_h)
+                painter.fillRect(clip_rect, QBrush(fill_color))
+
+                # Highlight borders
+                if is_selected:
+                    border_pen = QPen(QColor("#a29bfe"), 2)
+                    painter.setPen(border_pen)
+                    painter.drawRect(clip_rect.adjusted(1, 1, -1, -1))
+                else:
+                    border_pen = QPen(QColor("rgba(0, 0, 0, 0.35)"), 1)
+                    painter.setPen(border_pen)
+                    painter.drawRect(clip_rect)
+
+                # Text inside segment
+                if clip_w > 40:
+                    label_font = QFont("Inter", 9, QFont.Weight.Bold if is_selected else QFont.Weight.Normal)
+                    painter.setFont(label_font)
+                    painter.setPen(QColor("#ffffff" if is_selected else "#b8b6c4"))
+
+                    clip_num = clip.get("clip_index", 0)
+                    emo_key = clip.get("user_emotion") or clip.get("ai_emotion") or "unknown"
+                    emo_info = EMOTION_MAP.get(emo_key, {})
+                    emo_lbl = emo_info.get("emoji", "")
+
+                    label_text = f"{clip_num:03d} {emo_lbl}"
+
+                    metrics = painter.fontMetrics()
+                    elided_text = metrics.elidedText(label_text, Qt.TextElideMode.ElideRight, int(clip_w - 6))
+                    painter.drawText(clip_rect.adjusted(3, 0, -3, 0), Qt.AlignmentFlag.AlignCenter, elided_text)
+
+        # 3. Playhead
+        if self._total_duration_ms > 0:
+            playhead_x = (self._playhead_position_ms / self._total_duration_ms) * w
+
+            # Vertical line
+            line_pen = QPen(QColor("#6c5ce7"), 1.5)
+            painter.setPen(line_pen)
+            painter.drawLine(QPointF(playhead_x, 0), QPointF(playhead_x, h))
+
+            # Handle (inverted triangle)
+            painter.setBrush(QBrush(QColor("#6c5ce7")))
+            painter.setPen(Qt.PenStyle.NoPen)
+
+            triangle = QPolygonF([
+                QPointF(playhead_x - 6, 0),
+                QPointF(playhead_x + 6, 0),
+                QPointF(playhead_x + 6, 12),
+                QPointF(playhead_x, 18),
+                QPointF(playhead_x - 6, 12)
+            ])
+            painter.drawPolygon(triangle)
+
+            # White dot
+            painter.setBrush(QBrush(QColor("#ffffff")))
+            painter.drawEllipse(QPointF(playhead_x, 6), 2.5, 2.5)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._is_scrubbing = True
+            target_ms = self.x_to_time(event.position().x())
+            self._playhead_position_ms = target_ms
+            self.seek_requested.emit(target_ms)
+            self.update()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._is_scrubbing:
+            target_ms = self.x_to_time(event.position().x())
+            self._playhead_position_ms = target_ms
+            self.seek_requested.emit(target_ms)
+            self.update()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._is_scrubbing = False
+            target_ms = self.x_to_time(event.position().x())
+            self._playhead_position_ms = target_ms
+            self.seek_requested.emit(target_ms)
+            self.update()
+
+
+class FaceOverlayVideoWidget(QVideoWidget):
+    """Video widget that paints face detection boxes from detections.json."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._detections: list[dict] = []
+        self._current_sec = 0.0
+        self._show_boxes = True
+        self._max_time_delta = 0.65
+        self._video_size: tuple[int, int] | None = None
+
+    def set_detections(self, detections: list[dict]):
+        self._detections = detections or []
+        self._video_size = self._infer_video_size(self._detections)
+        self.update()
+
+    def set_current_position_ms(self, position_ms: int):
+        self._current_sec = max(0.0, position_ms / 1000.0)
+        self.update()
+
+    def set_show_boxes(self, show: bool):
+        self._show_boxes = show
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent):
+        super().paintEvent(event)
+        if not self._show_boxes or not self._detections:
+            return
+        detection = self._nearest_detection(self._current_sec)
+        if not detection or not detection.get("faces"):
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        font = QFont("Inter", 9, QFont.Weight.Bold)
+        painter.setFont(font)
+
+        for face in detection.get("faces", []):
+            bbox = face.get("bbox") or []
+            if len(bbox) != 4:
+                continue
+            rect = self._map_bbox(bbox)
+            color = QColor("#00e5ff")
+            painter.setPen(QPen(color, 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(rect)
+
+            track_id = face.get('track_id', face.get('face_id', 0))
+            label = f"mặt_{track_id} {float(face.get('confidence', 0)):.2f}"
+            label_rect = QRectF(rect.left(), max(0, rect.top() - 22), max(92, rect.width()), 20)
+            bg = QColor("#000000")
+            bg.setAlpha(180)
+            painter.fillRect(label_rect, bg)
+            painter.setPen(QPen(color, 1))
+            painter.drawText(label_rect.adjusted(4, 0, -4, 0), Qt.AlignmentFlag.AlignVCenter, label)
+
+    def _nearest_detection(self, current_sec: float) -> dict | None:
+        best = None
+        best_delta = float("inf")
+        for item in self._detections:
+            delta = abs(float(item.get("timestamp", 0.0)) - current_sec)
+            if delta < best_delta:
+                best = item
+                best_delta = delta
+        return best if best_delta <= self._max_time_delta else None
+
+    def _map_bbox(self, bbox: list) -> QRectF:
+        src_w, src_h = self._video_size or self._infer_size_from_bbox(bbox)
+        widget_w, widget_h = max(1, self.width()), max(1, self.height())
+        scale = min(widget_w / max(1, src_w), widget_h / max(1, src_h))
+        draw_w = src_w * scale
+        draw_h = src_h * scale
+        offset_x = (widget_w - draw_w) / 2
+        offset_y = (widget_h - draw_h) / 2
+        x1, y1, x2, y2 = [float(v) for v in bbox]
+        return QRectF(
+            offset_x + x1 * scale,
+            offset_y + y1 * scale,
+            max(1.0, (x2 - x1) * scale),
+            max(1.0, (y2 - y1) * scale),
+        )
+
+    @staticmethod
+    def _infer_video_size(detections: list[dict]) -> tuple[int, int] | None:
+        for item in detections:
+            size = item.get("frame_size")
+            if isinstance(size, list) and len(size) == 2 and size[0] and size[1]:
+                return int(size[0]), int(size[1])
+        return None
+
+    @staticmethod
+    def _infer_size_from_bbox(bbox: list) -> tuple[int, int]:
+        x2 = max(float(bbox[2]), 640.0)
+        y2 = max(float(bbox[3]), 360.0)
+        return int(x2), int(y2)
+
+
+class ReviewPage(QWidget):
+    """Review & Labeling Studio."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._all_clips: list[dict] = []
+        self._clips: list[dict] = []
+        self._active_video_id: str | None = None
+        self._current_index = -1
+        self._current_clip: dict | None = None
+        self._is_scrubbing = False
         self._setup_ui()
         self._setup_shortcuts()
 
     def _setup_ui(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # --- Top: Filter Bar ---
-        self._build_filter_bar(main_layout)
+        self._build_toolbar(root)
 
-        # --- Main content: Splitter ---
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.addWidget(self._build_media_bin())
+        main_splitter.addWidget(self._build_center_workspace())
+        main_splitter.addWidget(self._build_inspector())
+        main_splitter.setSizes([230, 580, 300])
+        main_splitter.setChildrenCollapsible(False)
+        root.addWidget(main_splitter, stretch=1)
 
-        # Left panel: Video + Transcript + Actions
-        left_panel = self._build_left_panel()
-        splitter.addWidget(left_panel)
+    def _build_toolbar(self, parent_layout):
+        bar = QFrame()
+        bar.setObjectName("card")
+        bar_layout = QVBoxLayout(bar)
+        bar_layout.setContentsMargins(12, 6, 12, 6)
+        bar_layout.setSpacing(4)
 
-        # Right panel: AI Predictions
-        right_panel = self._build_right_panel()
-        splitter.addWidget(right_panel)
+        # ── Hàng 1: bộ đếm + tìm kiếm + nút tải lại ──────────────────────
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
 
-        # Set splitter proportions (60% left, 40% right)
-        splitter.setSizes([650, 450])
-
-        main_layout.addWidget(splitter, stretch=1)
-
-    def _build_filter_bar(self, parent_layout):
-        """Filter bar at the top"""
-        filter_card = QFrame()
-        filter_card.setObjectName("card")
-        filter_card.setFixedHeight(56)
-
-        layout = QHBoxLayout(filter_card)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(12)
-
-        # Navigation info
         self.clip_counter = QLabel("Clip 0 / 0")
         self.clip_counter.setObjectName("accentText")
-        layout.addWidget(self.clip_counter)
+        self.clip_counter.setFixedWidth(90)
+        row1.addWidget(self.clip_counter)
 
-        layout.addSpacing(16)
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("🔍  Tìm kiếm transcript / tên clip...")
+        self.search_box.textChanged.connect(self._apply_filters)
+        row1.addWidget(self.search_box, stretch=1)
 
-        # Filters
-        layout.addWidget(QLabel("Status:"))
+        self.reload_btn = QPushButton("  Tải lại")
+        self.reload_btn.setObjectName("ghostBtn")
+        self.reload_btn.setFixedWidth(90)
+        self.reload_btn.clicked.connect(self.refresh_data)
+        row1.addWidget(self.reload_btn)
+        bar_layout.addLayout(row1)
+
+        # ── Hàng 2: các bộ lọc ─────────────────────────────────────────────
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
+
+        row2.addWidget(QLabel("Trạng thái:"))
         self.filter_status = QComboBox()
-        self.filter_status.addItems(["All", "Needs Review", "Auto Approved", "Approved", "Rejected", "Pending"])
-        self.filter_status.currentTextChanged.connect(self._on_filter_changed)
-        layout.addWidget(self.filter_status)
+        self.filter_status.setMinimumWidth(110)
+        self.filter_status.addItems(["Tất cả", "pending", "needs_review", "ai_labeled", "approved", "rejected", "failed"])
+        self.filter_status.currentTextChanged.connect(self._apply_filters)
+        row2.addWidget(self.filter_status)
 
-        layout.addWidget(QLabel("Emotion:"))
+        row2.addWidget(QLabel("Cảm xúc:"))
         self.filter_emotion = QComboBox()
-        self.filter_emotion.addItems(["All"] + [
-            f"{v['emoji']} {v['label']}" for v in EMOTION_MAP.values()
-        ])
-        self.filter_emotion.currentTextChanged.connect(self._on_filter_changed)
-        layout.addWidget(self.filter_emotion)
+        self.filter_emotion.setMinimumWidth(110)
+        emotion_items = ["Tất cả"] + [info.get("label", k) for k, info in EMOTION_MAP.items()]
+        self._emotion_filter_keys = ["Tất cả"] + list(EMOTION_MAP.keys())
+        self.filter_emotion.addItems(emotion_items)
+        self.filter_emotion.currentIndexChanged.connect(self._apply_filters)
+        row2.addWidget(self.filter_emotion)
 
-        layout.addWidget(QLabel("Source:"))
-        self.filter_source = QComboBox()
-        self.filter_source.addItems(["All"])
-        self.filter_source.currentTextChanged.connect(self._on_filter_changed)
-        layout.addWidget(self.filter_source)
+        self.only_incongruity = QCheckBox("⚠️ Không đồng nhất")
+        self.only_incongruity.stateChanged.connect(self._apply_filters)
+        row2.addWidget(self.only_incongruity)
 
-        self.check_incongruity = QCheckBox("Only Incongruity")
-        self.check_incongruity.stateChanged.connect(self._on_filter_changed)
-        layout.addWidget(self.check_incongruity)
+        row2.addStretch()
+        bar_layout.addLayout(row2)
 
-        layout.addStretch()
+        parent_layout.addWidget(bar)
 
-        # Navigation buttons
-        self.prev_btn = QPushButton("⏮ Prev")
-        self.prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.prev_btn.clicked.connect(self._go_prev)
-        layout.addWidget(self.prev_btn)
-
-        self.next_btn = QPushButton("Next ⏭")
-        self.next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.next_btn.clicked.connect(self._go_next)
-        layout.addWidget(self.next_btn)
-
-        parent_layout.addWidget(filter_card)
-
-    def _build_left_panel(self) -> QWidget:
-        """Left panel: Video player + Transcript + Action buttons"""
-        panel = QWidget()
+    def _build_media_bin(self) -> QWidget:
+        panel = QFrame()
+        panel.setObjectName("card")
+        panel.setMinimumWidth(180)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(16, 12, 8, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
 
-        # --- Video Player ---
-        video_card = QFrame()
-        video_card.setObjectName("card")
-        video_layout = QVBoxLayout(video_card)
-        video_layout.setSpacing(8)
+        title = QLabel("Danh Sách Clip")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
-        self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumHeight(300)
-        self.video_widget.setStyleSheet("background-color: #000000; border-radius: 8px;")
-        video_layout.addWidget(self.video_widget)
+        self.video_summary = QLabel("Chưa tải clip")
+        self.video_summary.setObjectName("mutedText")
+        layout.addWidget(self.video_summary)
 
-        # Media player
-        self.media_player = QMediaPlayer()
-        self.audio_output = QAudioOutput()
-        self.media_player.setAudioOutput(self.audio_output)
-        self.media_player.setVideoOutput(self.video_widget)
+        self.clip_list = QListWidget()
+        self.clip_list.setObjectName("mediaBinList")
+        self.clip_list.currentRowChanged.connect(self._on_clip_row_changed)
+        layout.addWidget(self.clip_list, stretch=1)
 
-        # Player controls
-        controls = QHBoxLayout()
-        self.play_btn = QPushButton("▶")
-        self.play_btn.setObjectName("iconBtn")
-        self.play_btn.setFixedSize(36, 36)
-        self.play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.play_btn.clicked.connect(self._toggle_play)
-        controls.addWidget(self.play_btn)
-
-        self.time_label = QLabel("0:00 / 0:00")
-        self.time_label.setObjectName("mutedText")
-        controls.addWidget(self.time_label)
-
-        controls.addStretch()
-
-        self.clip_info_label = QLabel("No clip loaded")
-        self.clip_info_label.setObjectName("mutedText")
-        controls.addWidget(self.clip_info_label)
-
-        video_layout.addLayout(controls)
-
-        layout.addWidget(video_card)
-
-        # --- Transcript ---
-        transcript_card = QFrame()
-        transcript_card.setObjectName("card")
-        transcript_layout = QVBoxLayout(transcript_card)
-        transcript_layout.setSpacing(8)
-
-        transcript_title = QLabel("📝 Transcript")
-        transcript_title.setObjectName("sectionTitle")
-        transcript_layout.addWidget(transcript_title)
-
-        self.transcript_text = QPlainTextEdit()
-        self.transcript_text.setReadOnly(True)
-        self.transcript_text.setMaximumHeight(100)
-        self.transcript_text.setPlaceholderText("Không có transcript...")
-        transcript_layout.addWidget(self.transcript_text)
-
-        layout.addWidget(transcript_card)
-
-        # --- Action Buttons ---
-        action_card = QFrame()
-        action_card.setObjectName("cardElevated")
-        action_layout = QVBoxLayout(action_card)
-        action_layout.setSpacing(8)
-
-        action_title = QLabel("🏷️ Gán nhãn cảm xúc")
-        action_title.setObjectName("sectionTitle")
-        action_layout.addWidget(action_title)
-
-        # Emotion buttons grid
-        emotion_grid = QHBoxLayout()
-        emotion_grid.setSpacing(6)
-        self._emotion_buttons: dict[str, QPushButton] = {}
-
-        for key, info in EMOTION_MAP.items():
-            btn = QPushButton(f"{info['emoji']} {info['label']}")
-            btn.setObjectName("emotionBtn")
-            btn.setCheckable(True)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setToolTip(f"Shortcut: {info['shortcut']}")
-            btn.clicked.connect(lambda checked, k=key: self._on_emotion_selected(k))
-            self._emotion_buttons[key] = btn
-            emotion_grid.addWidget(btn)
-
-        action_layout.addLayout(emotion_grid)
-
-        # Approve / Reject buttons
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-
-        self.approve_btn = QPushButton("✅ Approve (A)")
-        self.approve_btn.setObjectName("successBtn")
-        self.approve_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.approve_btn.clicked.connect(self._on_approve)
-        action_row.addWidget(self.approve_btn)
-
-        self.reject_btn = QPushButton("❌ Reject (R)")
-        self.reject_btn.setObjectName("dangerBtn")
-        self.reject_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reject_btn.clicked.connect(self._on_reject)
-        action_row.addWidget(self.reject_btn)
-
-        action_row.addStretch()
-
-        shortcut_hint = QLabel("Keys: 1-7 Emotion | A Approve | R Reject | ← → Navigate")
-        shortcut_hint.setObjectName("mutedText")
-        action_row.addWidget(shortcut_hint)
-
-        action_layout.addLayout(action_row)
-
-        layout.addWidget(action_card)
-
+        hint = QLabel("⏎ Space • A duyệt • R từ chối • 1–7 nhãn • ←/→ chuyển")
+        hint.setWordWrap(True)
+        hint.setObjectName("mutedText")
+        layout.addWidget(hint)
         return panel
 
-    def _build_right_panel(self) -> QWidget:
-        """Right panel: AI predictions and analysis"""
+    def _build_center_workspace(self) -> QWidget:
         panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        monitor_card = QFrame()
+        monitor_card.setObjectName("cardElevated")
+        monitor_layout = QVBoxLayout(monitor_card)
+        monitor_layout.setSpacing(8)
+
+        header = QHBoxLayout()
+        self.clip_title = QLabel("Màn Hình Xem Trước")
+        self.clip_title.setObjectName("sectionTitle")
+        header.addWidget(self.clip_title)
+        header.addStretch()
+        self.clip_meta = QLabel("Chưa chọn clip")
+        self.clip_meta.setObjectName("mutedText")
+        header.addWidget(self.clip_meta)
+        self.show_face_boxes = QCheckBox("Khung mặt")
+        self.show_face_boxes.setChecked(True)
+        self.show_face_boxes.setToolTip("Hiển thị khung nhận diện khuôn mặt trong khung xem trước")
+        self.show_face_boxes.stateChanged.connect(lambda state: self.video_widget.set_show_boxes(state == Qt.CheckState.Checked.value))
+        header.addWidget(self.show_face_boxes)
+        monitor_layout.addLayout(header)
+
+        self.video_widget = FaceOverlayVideoWidget()
+        self.video_widget.setMinimumHeight(360)
+        self.video_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.video_widget.setStyleSheet("background-color: #000; border-radius: 8px;")
+        monitor_layout.addWidget(self.video_widget, stretch=1)
+
+        self.media_player = QMediaPlayer(self)
+        self.audio_output = QAudioOutput(self)
+        self.media_player.setAudioOutput(self.audio_output)
+        self.media_player.setVideoOutput(self.video_widget)
+        self.media_player.positionChanged.connect(self._on_position_changed)
+        self.media_player.durationChanged.connect(self._on_duration_changed)
+
+        controls = QHBoxLayout()
+        self.prev_btn = QPushButton("◀  Trước")
+        self.prev_btn.clicked.connect(self._go_prev)
+        controls.addWidget(self.prev_btn)
+        self.play_btn = QPushButton("▶  Phát")
+        self.play_btn.clicked.connect(self._toggle_play)
+        controls.addWidget(self.play_btn)
+        self.next_btn = QPushButton("Tiếp  ▶")
+        self.next_btn.clicked.connect(self._go_next)
+        controls.addWidget(self.next_btn)
+
+        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider.setRange(0, 0)
+        self.position_slider.sliderPressed.connect(lambda: setattr(self, "_is_scrubbing", True))
+        self.position_slider.sliderReleased.connect(self._seek_to_slider)
+        controls.addWidget(self.position_slider, stretch=1)
+
+        self.time_label = QLabel("00:00 / 00:00")
+        self.time_label.setObjectName("mutedText")
+        controls.addWidget(self.time_label)
+        monitor_layout.addLayout(controls)
+        layout.addWidget(monitor_card, stretch=3)
+
+        timeline_card = QFrame()
+        timeline_card.setObjectName("card")
+        timeline_layout = QVBoxLayout(timeline_card)
+        timeline_title = QLabel("Dòng Thời Gian")
+        timeline_title.setObjectName("sectionTitle")
+        timeline_layout.addWidget(timeline_title)
+        self.timeline_bar = ClipTimelineBar()
+        self.timeline_bar.clip_selected.connect(self._select_clip)
+        self.timeline_bar.seek_requested.connect(self._on_timeline_seek)
+        timeline_layout.addWidget(self.timeline_bar)
+        layout.addWidget(timeline_card)
+        return panel
+
+    def _build_inspector(self) -> QWidget:
+        # Bao bọc toàn bộ inspector trong QScrollArea
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(240)
 
-        scroll_content = QWidget()
-        layout = QVBoxLayout(scroll_content)
-        layout.setContentsMargins(8, 12, 16, 12)
-        layout.setSpacing(12)
+        panel = QFrame()
+        panel.setObjectName("card")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
 
-        # --- AI Prediction Summary ---
-        pred_card = QFrame()
-        pred_card.setObjectName("cardElevated")
-        pred_layout = QVBoxLayout(pred_card)
-        pred_layout.setSpacing(8)
+        # ── AI prediction ──────────────────────────────────────────────
+        ai_frame = QFrame()
+        ai_frame.setObjectName("cardElevated")
+        ai_layout = QVBoxLayout(ai_frame)
+        ai_layout.setContentsMargins(10, 8, 10, 8)
+        ai_layout.setSpacing(4)
 
-        pred_title = QLabel("🎭 AI Prediction")
-        pred_title.setObjectName("sectionTitle")
-        pred_layout.addWidget(pred_title)
+        ai_header = QLabel("Thanh Tra")
+        ai_header.setObjectName("sectionTitle")
+        ai_layout.addWidget(ai_header)
 
-        # Main prediction
-        self.pred_emotion_label = QLabel("—")
+        self.pred_emotion_label = QLabel("AI: -")
         self.pred_emotion_label.setObjectName("statValue")
-        self.pred_emotion_label.setStyleSheet(f"font-size: 22px;")
-        pred_layout.addWidget(self.pred_emotion_label)
+        ai_layout.addWidget(self.pred_emotion_label)
 
-        # Score / Agreement / Quality
-        info_grid = QHBoxLayout()
+        stats_grid = QHBoxLayout()
+        left_col = QVBoxLayout()
+        self.confidence_label = QLabel("Độ tin cậy: -")
+        self.confidence_label.setObjectName("statLabel")
+        left_col.addWidget(self.confidence_label)
+        self.agreement_label = QLabel("Đồng thuận: -")
+        self.agreement_label.setObjectName("statLabel")
+        left_col.addWidget(self.agreement_label)
+        stats_grid.addLayout(left_col)
+        self.quality_label = QLabel("Chất lượng: -")
+        self.quality_label.setObjectName("statLabel")
+        stats_grid.addWidget(self.quality_label)
+        ai_layout.addLayout(stats_grid)
 
-        self.pred_score_label = QLabel("Score: —")
-        self.pred_score_label.setObjectName("statLabel")
-        info_grid.addWidget(self.pred_score_label)
+        self.warning_label = QLabel("")
+        self.warning_label.setObjectName("warningText")
+        self.warning_label.setWordWrap(True)
+        self.warning_label.setVisible(False)
+        ai_layout.addWidget(self.warning_label)
+        layout.addWidget(ai_frame)
 
-        self.pred_agreement_label = QLabel("Agreement: —")
-        self.pred_agreement_label.setObjectName("statLabel")
-        info_grid.addWidget(self.pred_agreement_label)
+        # ── Thông tin cắt đoạn thông minh ─────────────────────────────
+        segment_frame = QFrame()
+        segment_frame.setObjectName("subtleCard")
+        segment_layout = QVBoxLayout(segment_frame)
+        segment_layout.setContentsMargins(10, 8, 10, 8)
+        segment_layout.setSpacing(4)
+        segment_title = QLabel("Thông Tin Cắt Đoạn")
+        segment_title.setObjectName("sectionTitle")
+        segment_layout.addWidget(segment_title)
+        self.segment_source_label = QLabel("Nguồn cắt: -")
+        self.segment_source_label.setObjectName("statLabel")
+        segment_layout.addWidget(self.segment_source_label)
+        self.segment_face_label = QLabel("Tỷ lệ có mặt: -")
+        self.segment_face_label.setObjectName("statLabel")
+        segment_layout.addWidget(self.segment_face_label)
+        self.segment_speech_label = QLabel("Tỷ lệ hội thoại: -")
+        self.segment_speech_label.setObjectName("statLabel")
+        segment_layout.addWidget(self.segment_speech_label)
+        self.segment_quality_label = QLabel("Đánh giá đoạn: -")
+        self.segment_quality_label.setObjectName("statLabel")
+        segment_layout.addWidget(self.segment_quality_label)
+        layout.addWidget(segment_frame)
 
-        self.pred_quality_label = QLabel("Quality: —")
-        self.pred_quality_label.setObjectName("statLabel")
-        info_grid.addWidget(self.pred_quality_label)
+        # ── Điểm cảm xúc ───────────────────────────────────────────────
+        score_title = QLabel("Điểm Cảm Xúc")
+        score_title.setObjectName("sectionTitle")
+        layout.addWidget(score_title)
+        self.score_rows: dict[str, ScoreRow] = {}
+        for key, info in EMOTION_MAP.items():
+            row = ScoreRow(info.get("label", key))
+            self.score_rows[key] = row
+            layout.addWidget(row)
 
-        pred_layout.addLayout(info_grid)
+        # ── Lời thoại ─────────────────────────────────────────────────
+        transcript_title = QLabel("Lời Thoại")
+        transcript_title.setObjectName("sectionTitle")
+        layout.addWidget(transcript_title)
+        self.transcript_text = QPlainTextEdit()
+        self.transcript_text.setReadOnly(True)
+        self.transcript_text.setFixedHeight(80)
+        self.transcript_text.setPlaceholderText("Không có lời thoại")
+        layout.addWidget(self.transcript_text)
 
-        # Incongruity warning
-        self.incongruity_label = QLabel("")
-        self.incongruity_label.setObjectName("warningText")
-        self.incongruity_label.setVisible(False)
-        pred_layout.addWidget(self.incongruity_label)
+        # ── Nhãn thủ công ────────────────────────────────────────────────
+        label_header = QHBoxLayout()
+        label_title = QLabel("Nhãn Thủ Công")
+        label_title.setObjectName("sectionTitle")
+        label_header.addWidget(label_title)
+        label_header.addStretch()
+        layout.addLayout(label_header)
 
-        layout.addWidget(pred_card)
+        self._emotion_buttons: dict[str, QPushButton] = {}
+        # 2 cột cho các nút nhãn
+        btn_grid = QWidget()
+        btn_grid_layout = QHBoxLayout(btn_grid)
+        btn_grid_layout.setContentsMargins(0, 0, 0, 0)
+        btn_grid_layout.setSpacing(6)
+        col_left  = QVBoxLayout()
+        col_right = QVBoxLayout()
+        col_left.setSpacing(4)
+        col_right.setSpacing(4)
+        items = list(EMOTION_MAP.items())
+        mid = (len(items) + 1) // 2
+        for i, (key, info) in enumerate(items):
+            btn = QPushButton(f"{info.get('shortcut', '')}. {info.get('label', key)}")
+            btn.setObjectName("emotionBtn")
+            btn.setCheckable(True)
+            btn.setMinimumHeight(30)
+            btn.clicked.connect(lambda checked=False, k=key: self._on_emotion_selected(k))
+            self._emotion_buttons[key] = btn
+            if i < mid:
+                col_left.addWidget(btn)
+            else:
+                col_right.addWidget(btn)
+        btn_grid_layout.addLayout(col_left)
+        btn_grid_layout.addLayout(col_right)
+        layout.addWidget(btn_grid)
 
-        # --- Per-Model Breakdown ---
-        model_card = QFrame()
-        model_card.setObjectName("card")
-        model_layout = QVBoxLayout(model_card)
-        model_layout.setSpacing(8)
+        # ── Sentiment Score Slider [–3, +3] ──────────────────────────────
+        sentiment_frame = QFrame()
+        sentiment_frame.setObjectName("subtleCard")
+        sentiment_layout = QVBoxLayout(sentiment_frame)
+        sentiment_layout.setContentsMargins(10, 8, 10, 8)
+        sentiment_layout.setSpacing(4)
 
-        model_title = QLabel("🔬 Per-Model Breakdown")
-        model_title.setObjectName("sectionTitle")
-        model_layout.addWidget(model_title)
+        sentiment_header = QHBoxLayout()
+        sentiment_title = QLabel("★ Sentiment Score")
+        sentiment_title.setObjectName("sectionTitle")
+        sentiment_header.addWidget(sentiment_title)
+        sentiment_header.addStretch()
+        self.sentiment_value_label = QLabel("0.0")
+        self.sentiment_value_label.setObjectName("statValue")
+        self.sentiment_value_label.setFixedWidth(50)
+        self.sentiment_value_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        sentiment_header.addWidget(self.sentiment_value_label)
+        sentiment_layout.addLayout(sentiment_header)
 
-        self.model_scores: dict[str, AIScoreBar] = {}
-        for model_name in ["HSEmotion", "DeepFace", "PhoBERT", "Wav2Vec2"]:
-            score_bar = AIScoreBar(model_name)
-            self.model_scores[model_name.lower()] = score_bar
-            model_layout.addWidget(score_bar)
+        self.sentiment_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sentiment_slider.setMinimum(-30)  # -3.0 × 10
+        self.sentiment_slider.setMaximum(30)   # +3.0 × 10
+        self.sentiment_slider.setValue(0)
+        self.sentiment_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.sentiment_slider.setTickInterval(10)  # marks at -3, -2, -1, 0, 1, 2, 3
+        self.sentiment_slider.setSingleStep(1)     # 0.1 precision
+        self.sentiment_slider.setPageStep(5)       # 0.5 jumps
+        self.sentiment_slider.setFixedHeight(28)
+        self.sentiment_slider.valueChanged.connect(self._on_sentiment_slider_changed)
+        sentiment_layout.addWidget(self.sentiment_slider)
 
-        layout.addWidget(model_card)
+        # Scale labels row
+        scale_row = QHBoxLayout()
+        scale_row.setContentsMargins(0, 0, 0, 0)
+        neg_label = QLabel("-3 Tiêu cực")
+        neg_label.setObjectName("mutedText")
+        scale_row.addWidget(neg_label)
+        scale_row.addStretch()
+        neutral_label = QLabel("0")
+        neutral_label.setObjectName("mutedText")
+        neutral_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scale_row.addWidget(neutral_label)
+        scale_row.addStretch()
+        pos_label = QLabel("Tích cực +3")
+        pos_label.setObjectName("mutedText")
+        pos_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        scale_row.addWidget(pos_label)
+        sentiment_layout.addLayout(scale_row)
 
-        # --- Emotion Distribution ---
-        dist_card = QFrame()
-        dist_card.setObjectName("card")
-        dist_layout = QVBoxLayout(dist_card)
-        dist_layout.setSpacing(6)
+        layout.addWidget(sentiment_frame)
 
-        dist_title = QLabel("📊 Emotion Scores")
-        dist_title.setObjectName("sectionTitle")
-        dist_layout.addWidget(dist_title)
+        # ── Ghi chú ──────────────────────────────────────────────────
+        notes_title = QLabel("Ghi Chú Reviewer")
+        notes_title.setObjectName("sectionTitle")
+        layout.addWidget(notes_title)
+        self.notes_text = QPlainTextEdit()
+        self.notes_text.setFixedHeight(70)
+        self.notes_text.setPlaceholderText("Ghi chú tuù chọn...")
+        layout.addWidget(self.notes_text)
 
-        self.emotion_scores: dict[str, EmotionScoreBar] = {}
-        for emotion_key in EMOTION_MAP.keys():
-            score_bar = EmotionScoreBar(emotion_key)
-            self.emotion_scores[emotion_key] = score_bar
-            dist_layout.addWidget(score_bar)
+        # ── Nút hành động chính ────────────────────────────────────────
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.approve_btn = QPushButton("✔  Duyệt (A)")
+        self.approve_btn.setObjectName("successBtn")
+        self.approve_btn.setMinimumHeight(36)
+        self.approve_btn.clicked.connect(self._on_approve)
+        actions.addWidget(self.approve_btn)
+        self.reject_btn = QPushButton("✖  Từ chối (R)")
+        self.reject_btn.setObjectName("dangerBtn")
+        self.reject_btn.setMinimumHeight(36)
+        self.reject_btn.clicked.connect(self._on_reject)
+        actions.addWidget(self.reject_btn)
+        layout.addLayout(actions)
 
-        layout.addWidget(dist_card)
+        self.save_btn = QPushButton("💾  Lưu Ghi Chú / Nhãn")
+        self.save_btn.setMinimumHeight(32)
+        self.save_btn.clicked.connect(self._save_current_review)
+        layout.addWidget(self.save_btn)
+
+        self.gemini_btn = QPushButton("🤖  Gemini Verify")
+        self.gemini_btn.setMinimumHeight(32)
+        self.gemini_btn.setToolTip("Gọi Gemini 2.5 Flash để verify/re-score clip hiện tại")
+        self.gemini_btn.clicked.connect(self._on_gemini_verify)
+        layout.addWidget(self.gemini_btn)
 
         layout.addStretch()
-
-        scroll.setWidget(scroll_content)
-
-        outer_layout = QVBoxLayout(panel)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.addWidget(scroll)
-
-        return panel
+        scroll.setWidget(panel)
+        return scroll
 
     def _setup_shortcuts(self):
-        """Setup keyboard shortcuts for quick labeling"""
-        # Emotion shortcuts (1-7)
         for key, info in EMOTION_MAP.items():
-            shortcut = QShortcut(QKeySequence(info["shortcut"]), self)
-            shortcut.activated.connect(lambda k=key: self._on_emotion_selected(k))
-
-        # Navigation shortcuts
+            QShortcut(QKeySequence(info["shortcut"]), self).activated.connect(
+                lambda k=key: self._on_emotion_selected(k)
+            )
         QShortcut(QKeySequence(Qt.Key.Key_Left), self).activated.connect(self._go_prev)
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(self._go_next)
-
-        # Approve/Reject shortcuts
         QShortcut(QKeySequence("A"), self).activated.connect(self._on_approve)
         QShortcut(QKeySequence("R"), self).activated.connect(self._on_reject)
-
-        # Space for play/pause
         QShortcut(QKeySequence(Qt.Key.Key_Space), self).activated.connect(self._toggle_play)
+        QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._save_current_review)
 
-    # ================================================================
-    # ACTIONS
-    # ================================================================
-
-    def _toggle_play(self):
-        """Toggle video play/pause"""
-        if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.media_player.pause()
-            self.play_btn.setText("▶")
-        else:
-            self.media_player.play()
-            self.play_btn.setText("⏸")
-
-    def _go_prev(self):
-        """Go to previous clip"""
-        if self._current_index > 0:
-            self._current_index -= 1
-            self._load_current_clip()
-
-    def _go_next(self):
-        """Go to next clip"""
-        if self._current_index < len(self._clips) - 1:
-            self._current_index += 1
-            self._load_current_clip()
-
-    def _on_emotion_selected(self, emotion_key: str):
-        """Handle emotion button click"""
-        # Uncheck all, check selected
-        for key, btn in self._emotion_buttons.items():
-            btn.setChecked(key == emotion_key)
-
-        # Update in database
-        if self._current_clip:
-            self._save_label(emotion_key)
-
-    def _on_approve(self):
-        """Approve current clip"""
-        if self._current_clip:
-            self._update_status("approved")
-            self._go_next()
-
-    def _on_reject(self):
-        """Reject current clip"""
-        if self._current_clip:
-            self._update_status("rejected")
-            self._go_next()
-
-    def _on_filter_changed(self):
-        """Reload clips based on filters"""
-        self._load_clips()
-
-    # ================================================================
-    # DATA
-    # ================================================================
+    # Data -----------------------------------------------------------
 
     def refresh_data(self):
-        """Refresh clip list from database"""
         self._load_clips()
-        self._load_video_sources()
 
-    def _load_video_sources(self):
-        """Load video names for filter dropdown"""
-        try:
-            from backend.database.local_db import get_session
-            from backend.database.models import Video
-
-            session = get_session()
-            try:
-                videos = session.query(Video).all()
-                self.filter_source.clear()
-                self.filter_source.addItem("All")
-                for v in videos:
-                    name = v.title or v.movie_name or f"Video {v.id[:8]}"
-                    self.filter_source.addItem(name)
-            finally:
-                session.close()
-        except Exception:
-            pass
+    def set_active_video(self, video_id: str | None):
+        self._active_video_id = video_id
+        self._load_clips()
 
     def _load_clips(self):
-        """Load clips from database with current filters"""
         try:
             from backend.database.local_db import get_session
-            from backend.database.models import Clip
+            from backend.database.models import Clip, Video
 
             session = get_session()
             try:
                 query = session.query(Clip)
-
-                # Apply filters
-                status_filter = self.filter_status.currentText()
-                if status_filter != "All":
-                    status_map = {
-                        "Needs Review": "needs_review",
-                        "Auto Approved": "auto_approved",
-                        "Approved": "approved",
-                        "Rejected": "rejected",
-                        "Pending": "pending",
-                    }
-                    if status_filter in status_map:
-                        query = query.filter(Clip.status == status_map[status_filter])
-
-                # Order by quality score (needs review first)
-                query = query.order_by(Clip.quality_score.desc())
-
-                clips = query.all()
-                self._clips = []
-                for clip in clips:
-                    self._clips.append({
-                        "id": clip.id,
-                        "video_id": clip.video_id,
-                        "clip_path": clip.clip_path,
-                        "start_time": clip.start_time,
-                        "end_time": clip.end_time,
-                        "duration": clip.duration,
-                        "transcript": clip.transcript,
-                        "ai_emotion": clip.ai_emotion,
-                        "ai_confidence": clip.ai_confidence,
-                        "ai_agreement": clip.ai_agreement,
-                        "quality_score": clip.quality_score,
-                        "has_incongruity": clip.has_incongruity,
-                        "human_emotion": clip.human_emotion,
-                        "status": clip.status,
-                        "all_scores": clip.all_scores,
-                        "per_model_scores": clip.per_model_scores,
-                    })
-
-                self._current_index = 0
-                if self._clips:
-                    self._load_current_clip()
+                if self._active_video_id:
+                    query = query.filter(Clip.video_id == self._active_video_id)
+                    clips = query.order_by(Clip.start_time.asc()).all()
                 else:
-                    self._clear_display()
-
-                self.clip_counter.setText(f"Clip {self._current_index + 1} / {len(self._clips)}")
-
+                    clips = query.join(Video).order_by(Video.created_at.desc(), Clip.start_time.asc()).all()
+                self._all_clips = [self._clip_to_dict(clip) for clip in clips]
             finally:
                 session.close()
-        except Exception as e:
-            self._clips = []
+        except Exception as exc:
+            self._all_clips = []
+            QMessageBox.warning(self, "Lỗi tải clip", f"Không thể tải danh sách clip:\n{exc}")
+        self._apply_filters()
+
+    def _clip_to_dict(self, clip) -> dict:
+        display_name = f"Clip {clip.clip_index:03d}"
+        per_model = clip.per_model_scores or {}
+        gem_meta = per_model.get("gemini_prefilter", {})
+        segment_meta = per_model.get("segment", {})
+        return {
+            "id": clip.id,
+            "video_id": clip.video_id,
+            "clip_index": clip.clip_index,
+            "display_name": display_name,
+            "clip_path": clip.clip_path,
+            "start_time": clip.start_time or 0,
+            "end_time": clip.end_time or 0,
+            "duration": clip.duration or 0,
+            "transcript": clip.transcript or "",
+            "ai_emotion": clip.ai_emotion,
+            "ai_confidence": clip.ai_confidence or 0,
+            "ai_agreement": clip.ai_agreement,
+            "quality_score": clip.quality_score or 0,
+            "has_incongruity": bool(clip.has_incongruity),
+            "user_emotion": clip.user_emotion,
+            "sentiment_score": clip.sentiment_score,
+            "reviewer_notes": clip.reviewer_notes or "",
+            "status": clip.status or "pending",
+            "all_scores": clip.all_scores or {},
+            "per_model_scores": per_model,
+            "num_faces": clip.num_faces or 0,
+            "face_ratio": clip.face_ratio or gem_meta.get("face_coverage", segment_meta.get("face_coverage", 0)),
+            "speech_coverage": gem_meta.get("speech_coverage", segment_meta.get("speech_coverage", 0)),
+            "has_speech": clip.has_speech or False,
+        }
+
+    def _apply_filters(self):
+        text = self.search_box.text().strip().lower() if hasattr(self, "search_box") else ""
+        status = self.filter_status.currentText() if hasattr(self, "filter_status") else "Tất cả"
+
+        # filter_emotion dùng index để map ngược sang key gốc
+        emotion_key = "Tất cả"
+        if hasattr(self, "filter_emotion") and hasattr(self, "_emotion_filter_keys"):
+            idx = self.filter_emotion.currentIndex()
+            emotion_key = self._emotion_filter_keys[idx] if 0 <= idx < len(self._emotion_filter_keys) else "Tất cả"
+
+        only_incongruity = self.only_incongruity.isChecked() if hasattr(self, "only_incongruity") else False
+
+        filtered = []
+        for clip in self._all_clips:
+            if status != "Tất cả" and clip.get("status") != status:
+                continue
+            effective_emotion = clip.get("user_emotion") or clip.get("ai_emotion")
+            if emotion_key != "Tất cả" and effective_emotion != emotion_key:
+                continue
+            if only_incongruity and not clip.get("has_incongruity"):
+                continue
+            haystack = " ".join([
+                clip.get("display_name", ""),
+                clip.get("clip_path", "") or "",
+                clip.get("transcript", "") or "",
+            ]).lower()
+            if text and text not in haystack:
+                continue
+            filtered.append(clip)
+
+        self._clips = filtered
+        self._populate_lists()
+
+        scope = "video đang chọn" if self._active_video_id else "tất cả video"
+        self.video_summary.setText(f"{len(self._clips)} hiển thị / {len(self._all_clips)} clip ({scope})")  
+        if self._clips:
+            self._select_clip(0)
+        else:
             self._clear_display()
 
-    def _load_current_clip(self):
-        """Load and display the current clip"""
-        if not self._clips or self._current_index >= len(self._clips):
+    def _populate_lists(self):
+        self.clip_list.blockSignals(True)
+        self.clip_list.clear()
+        for clip in self._clips:
+            self.clip_list.addItem(ClipListItem(clip))
+        self.clip_list.blockSignals(False)
+
+        # Update timeline_bar
+        total_end = max([c.get("end_time", 0) for c in self._all_clips], default=0)
+        total_ms = int(total_end * 1000)
+        if total_ms <= 0:
+            total_ms = sum(int(c.get("duration", 0) * 1000) for c in self._clips)
+        self.timeline_bar.set_clips(self._clips, total_ms)
+
+    # Selection / playback -----------------------------------------
+
+    def _select_clip(self, index: int):
+        if not self._clips or index < 0 or index >= len(self._clips):
             return
+        self._current_index = index
+        self._current_clip = self._clips[index]
+        self.clip_list.blockSignals(True)
+        self.clip_list.setCurrentRow(index)
+        self.clip_list.blockSignals(False)
+        self.timeline_bar.set_current_clip(index)
+        self._load_current_clip()
 
-        clip = self._clips[self._current_index]
-        self._current_clip = clip
+    def _on_clip_row_changed(self, row: int):
+        self._select_clip(row)
 
-        # Update counter
+
+    def _load_current_clip(self):
+        clip = self._current_clip
+        if not clip:
+            self._clear_display()
+            return
         self.clip_counter.setText(f"Clip {self._current_index + 1} / {len(self._clips)}")
+        self.clip_title.setText(clip.get("display_name", "Clip"))
+        speech_indicator = "🔊" if clip.get("has_speech") else "🔇"
+        self.clip_meta.setText(
+            f"{clip.get('start_time', 0):.2f}s - {clip.get('end_time', 0):.2f}s | "
+            f"{clip.get('duration', 0):.1f}s | faces: {clip.get('num_faces', 0)} | "
+            f"{speech_indicator} speech"
+        )
 
-        # Load video
-        if clip.get("clip_path"):
-            self.media_player.setSource(QUrl.fromLocalFile(clip["clip_path"]))
-            self.clip_info_label.setText(
-                f"Duration: {clip.get('duration', 0):.1f}s | "
-                f"Faces: {clip.get('num_faces', 'N/A')}"
-            )
-
-        # Transcript
-        self.transcript_text.setPlainText(clip.get("transcript", "") or "Không có transcript")
-
-        # AI Prediction
-        ai_emotion = clip.get("ai_emotion", "—")
-        ai_conf = clip.get("ai_confidence", 0) or 0
-        emoji = EMOTION_MAP.get(ai_emotion, {}).get("emoji", "❓")
-        label = EMOTION_MAP.get(ai_emotion, {}).get("label", ai_emotion)
-        self.pred_emotion_label.setText(f"{emoji} {label}")
-
-        self.pred_score_label.setText(f"Score: {int(ai_conf * 100)}%")
-        self.pred_agreement_label.setText(f"Agreement: {clip.get('ai_agreement', 'N/A')}")
-        quality = clip.get("quality_score", 0) or 0
-        stars = "⭐" * int(quality * 5) + "☆" * (5 - int(quality * 5))
-        self.pred_quality_label.setText(f"Quality: {stars} {quality:.2f}")
-
-        # Incongruity
-        if clip.get("has_incongruity"):
-            self.incongruity_label.setText("⚠️ Incongruity detected: models disagree")
-            self.incongruity_label.setVisible(True)
+        path = clip.get("clip_path")
+        self.video_widget.set_detections(self._load_face_detections_for_clip(clip))
+        if path and os.path.exists(path):
+            self.media_player.setSource(QUrl.fromLocalFile(path))
+            self._is_preview_mode = True
+            self.audio_output.setMuted(True)
+            self.media_player.setPlaybackRate(2.5)
+            self.media_player.play()
+            self.play_btn.setText("▶  Phát")
         else:
-            self.incongruity_label.setVisible(False)
+            self.media_player.setSource(QUrl())
+            self.clip_meta.setText(self.clip_meta.text() + " | missing file")
+            self._is_preview_mode = False
 
-        # Emotion distribution
+        ai_emotion = clip.get("ai_emotion") or "unknown"
+        user_emotion = clip.get("user_emotion")
+        ai_info = EMOTION_MAP.get(ai_emotion, {"label": ai_emotion})
+        self.pred_emotion_label.setText(f"AI: {ai_info.get('label', ai_emotion)}")
+        self.confidence_label.setText(f"Độ tin cậy: {int((clip.get('ai_confidence') or 0) * 100)}%")
+        self.agreement_label.setText(f"Đồng thuận: {clip.get('ai_agreement') or '-'}")
+        self.quality_label.setText(f"Chất lượng: {(clip.get('quality_score') or 0):.2f}")
+        self.warning_label.setVisible(bool(clip.get("has_incongruity")))
+        self.warning_label.setText("Phát hiện không đồng nhất giữa các mô hình. Vui lòng kiểm tra kỹ.")
+        self._update_segment_info(clip)
+        self.transcript_text.setPlainText(clip.get("transcript") or "")
+        self.notes_text.setPlainText(clip.get("reviewer_notes") or "")
+
         all_scores = clip.get("all_scores") or {}
-        for key, bar in self.emotion_scores.items():
-            bar.set_score(all_scores.get(key, 0))
+        for key, row in self.score_rows.items():
+            row.set_score(all_scores.get(key, 0))
 
-        # Per-model scores
-        per_model = clip.get("per_model_scores") or {}
-        model_key_map = {
-            "hsemotion": "hsemotion",
-            "deepface": "deepface",
-            "phobert": "phobert",
-            "wav2vec2": "wav2vec2",
-        }
-        for model_key, bar in self.model_scores.items():
-            model_data = per_model.get(model_key, {})
-            if model_data:
-                top_emotion = max(model_data, key=model_data.get) if model_data else "—"
-                top_conf = model_data.get(top_emotion, 0) if model_data else 0
-                bar.set_score(top_emotion, top_conf)
-
-        # Set emotion button state (if human label exists)
-        human_emotion = clip.get("human_emotion")
         for key, btn in self._emotion_buttons.items():
-            btn.setChecked(key == human_emotion)
+            is_checked = (key == user_emotion)
+            btn.setChecked(is_checked)
+            if is_checked:
+                color = EMOTION_MAP.get(key, {}).get("color", "#6c5ce7")
+                btn.setStyleSheet(f"background-color: {color}22; border: 1.5px solid {color}; color: {color}; font-weight: bold;")
+        else:
+                btn.setStyleSheet("")
+
+        # Sentiment slider
+        sentiment = clip.get("sentiment_score")
+        if sentiment is None:
+            # Auto-map from emotion if no explicit score yet
+            from backend.database.models import SENTIMENT_MAPPING
+            effective_emotion = user_emotion or ai_emotion or "neutral"
+            sentiment = SENTIMENT_MAPPING.get(effective_emotion, 0.0)
+        self.sentiment_slider.blockSignals(True)
+        self.sentiment_slider.setValue(int(round(sentiment * 10)))
+        self.sentiment_slider.blockSignals(False)
+        self._update_sentiment_display(sentiment)
+
+    def _update_segment_info(self, clip: dict):
+        per_model = clip.get("per_model_scores") or {}
+        segment = per_model.get("segment") or {}
+        gem_meta = per_model.get("gemini_prefilter") or {}
+        source_map = {
+            "face_dialogue": "Mặt người + hội thoại",
+            "face_only": "Theo mặt người",
+            "scene_only": "Theo chuyển cảnh",
+        }
+        quality_map = {
+            "good": "Tốt",
+            "review": "Cần xem lại",
+            "weak": "Yếu",
+        }
+        source = source_map.get(segment.get("source"), segment.get("source") or "-")
+        # Ưu tiên gemini_prefilter > segment metadata
+        face_cov = gem_meta.get("face_coverage") if gem_meta.get("face_coverage") is not None else segment.get("face_coverage")
+        speech_cov = gem_meta.get("speech_coverage") if gem_meta.get("speech_coverage") is not None else segment.get("speech_coverage")
+        quality = quality_map.get(segment.get("quality_hint"), segment.get("quality_hint") or "-")
+        avg_faces = segment.get("num_faces_avg")
+        has_speech = clip.get("has_speech", False)
+        speech_label = "Có lời thoại" if has_speech else "Không có lời thoại"
+        self.segment_source_label.setText(f"Nguồn cắt: {source}")
+        self.segment_face_label.setText(
+            "Tỷ lệ có mặt: -" if face_cov is None else f"Tỷ lệ có mặt: {float(face_cov) * 100:.0f}% | Số mặt TB: {float(avg_faces or 0):.1f}"
+        )
+        self.segment_speech_label.setText(
+            f"Tỷ lệ hội thoại: {'-' if speech_cov is None else f'{float(speech_cov) * 100:.0f}%'} | {speech_label}"
+        )
+        self.segment_quality_label.setText(f"Đánh giá đoạn: {quality}")
+
+    def _load_face_detections_for_clip(self, clip: dict) -> list[dict]:
+        details = clip.get("per_model_scores") or {}
+        face_details = details.get("face_extraction") or {}
+        detections_path = face_details.get("detections_path")
+        if not detections_path:
+            return []
+        try:
+            path = Path(detections_path)
+            if not path.exists():
+                return []
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
 
     def _clear_display(self):
-        """Clear all displays when no clips available"""
+        self._current_index = -1
+        self._current_clip = None
         self.clip_counter.setText("Clip 0 / 0")
-        self.pred_emotion_label.setText("—")
-        self.pred_score_label.setText("Score: —")
-        self.pred_agreement_label.setText("Agreement: —")
-        self.pred_quality_label.setText("Quality: —")
-        self.incongruity_label.setVisible(False)
+        self.clip_title.setText("Màn Hình Xem Trước")
+        self.clip_meta.setText("Chưa chọn clip")
+        self.media_player.setSource(QUrl())
+        self.video_widget.set_detections([])
+        self.pred_emotion_label.setText("AI: -")
+        self.confidence_label.setText("Độ tin cậy: -")
+        self.agreement_label.setText("Đồng thuận: -")
+        self.quality_label.setText("Chất lượng: -")
+        self.segment_source_label.setText("Nguồn cắt: -")
+        self.segment_face_label.setText("Tỷ lệ có mặt: -")
+        self.segment_speech_label.setText("Tỷ lệ hội thoại: -")
+        self.segment_quality_label.setText("Đánh giá đoạn: -")
+        self.warning_label.setVisible(False)
         self.transcript_text.clear()
-        self.clip_info_label.setText("No clip loaded")
-
-        for bar in self.emotion_scores.values():
-            bar.set_score(0)
-        for bar in self.model_scores.values():
-            bar.set_score("—", 0)
+        self.notes_text.clear()
+        for row in self.score_rows.values():
+            row.set_score(0)
         for btn in self._emotion_buttons.values():
             btn.setChecked(False)
+            btn.setStyleSheet("")
+        self.sentiment_slider.blockSignals(True)
+        self.sentiment_slider.setValue(0)
+        self.sentiment_slider.blockSignals(False)
+        self.sentiment_value_label.setText("0.0")
+        self.timeline_bar.clear()
 
-    def _save_label(self, emotion_key: str):
-        """Save human label to database"""
+    def _toggle_play(self):
+        if not self._current_clip:
+            return
+        if getattr(self, "_is_preview_mode", False):
+            # Switch to normal play
+            self._is_preview_mode = False
+            self.audio_output.setMuted(False)
+            self.media_player.setPlaybackRate(1.0)
+            self.media_player.setPosition(0)
+            self.media_player.play()
+            self.play_btn.setText("⏸  Dừng")
+        else:
+            if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                # Go back to preview loop
+                self._is_preview_mode = True
+                self.audio_output.setMuted(True)
+                self.media_player.setPlaybackRate(2.5)
+                self.media_player.play()
+                self.play_btn.setText("▶  Phát")
+            else:
+                self._is_preview_mode = False
+                self.audio_output.setMuted(False)
+                self.media_player.setPlaybackRate(1.0)
+                self.media_player.play()
+                self.play_btn.setText("⏸  Dừng")
+
+    def _go_prev(self):
+        if self._current_index > 0:
+            self._select_clip(self._current_index - 1)
+
+    def _go_next(self):
+        if self._current_index < len(self._clips) - 1:
+            self._select_clip(self._current_index + 1)
+
+    @Slot(int)
+    def _on_position_changed(self, position: int):
+        if not self._is_scrubbing:
+            self.position_slider.setValue(position)
+        self._update_time_label(position, self.media_player.duration())
+        self.video_widget.set_current_position_ms(position)
+
+        # Update timeline playhead
+        if self._current_clip and not self.timeline_bar.is_scrubbing():
+            abs_time = int(self._current_clip.get("start_time", 0) * 1000) + position
+            self.timeline_bar.set_playhead_position(abs_time)
+
+        # GIF loop preview logic
+        if getattr(self, "_is_preview_mode", False):
+            dur = self.media_player.duration()
+            if dur > 200 and position >= dur - 150:
+                self.media_player.setPosition(0)
+
+    def _on_timeline_seek(self, absolute_time_ms: int):
+        target_sec = absolute_time_ms / 1000.0
+
+        # Check if the current clip contains it first, to avoid reloading player if we just scrub within the same clip
+        if self._current_clip:
+            start = self._current_clip.get("start_time", 0)
+            end = self._current_clip.get("end_time", 0)
+            if start <= target_sec <= end:
+                relative_ms = int((target_sec - start) * 1000)
+                self.media_player.setPosition(relative_ms)
+                # Keep playhead updated
+                self.timeline_bar.set_playhead_position(absolute_time_ms)
+                return
+
+        # Otherwise find the closest clip
+        best_idx = -1
+        min_dist = float('inf')
+        for idx, clip in enumerate(self._clips):
+            start = clip.get("start_time", 0)
+            end = clip.get("end_time", 0)
+            if start <= target_sec <= end:
+                best_idx = idx
+                break
+            dist = min(abs(target_sec - start), abs(target_sec - end))
+            if dist < min_dist:
+                min_dist = dist
+                best_idx = idx
+
+        if best_idx != -1:
+            clip = self._clips[best_idx]
+            start = clip.get("start_time", 0)
+            end = clip.get("end_time", 0)
+            self._select_clip(best_idx)
+            # Bound seek position within the clip
+            rel_sec = max(start, min(end, target_sec)) - start
+            self.media_player.setPosition(int(rel_sec * 1000))
+            self.timeline_bar.set_playhead_position(absolute_time_ms)
+
+    @Slot(int)
+    def _on_duration_changed(self, duration: int):
+        self.position_slider.setRange(0, duration)
+        self._update_time_label(self.media_player.position(), duration)
+
+    def _seek_to_slider(self):
+        self._is_scrubbing = False
+        self.media_player.setPosition(self.position_slider.value())
+
+    def _update_time_label(self, position_ms: int, duration_ms: int):
+        self.time_label.setText(f"{self._format_ms(position_ms)} / {self._format_ms(duration_ms)}")
+
+    @staticmethod
+    def _format_ms(value: int) -> str:
+        seconds = max(0, int(value / 1000))
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    # Review actions -------------------------------------------------
+
+    def _on_sentiment_slider_changed(self, raw_value: int):
+        """Called when user drags the sentiment slider."""
+        score = raw_value / 10.0  # Convert back to [-3.0, +3.0]
+        self._update_sentiment_display(score)
+        if self._current_clip:
+            self._current_clip["sentiment_score"] = score
+
+    def _update_sentiment_display(self, score: float):
+        """Update the sentiment value label text and color."""
+        sign = "+" if score > 0 else ""
+        self.sentiment_value_label.setText(f"{sign}{score:.1f}")
+        # Color coding: green for positive, red for negative, gray for neutral
+        if score > 0.5:
+            color = "#00b894"  # green
+        elif score < -0.5:
+            color = "#e17055"  # red
+        else:
+            color = "#b8b6c4"  # gray/neutral
+        self.sentiment_value_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 14px;")
+
+    def _on_emotion_selected(self, emotion_key: str):
+        if not self._current_clip:
+            return
+        self._current_clip["user_emotion"] = emotion_key
+
+        # Update styling of buttons
+        for key, btn in self._emotion_buttons.items():
+            is_checked = (key == emotion_key)
+            btn.setChecked(is_checked)
+            if is_checked:
+                color = EMOTION_MAP.get(key, {}).get("color", "#6c5ce7")
+                btn.setStyleSheet(f"background-color: {color}22; border: 1.5px solid {color}; color: {color}; font-weight: bold;")
+            else:
+                btn.setStyleSheet("")
+
+        # Auto-map sentiment when emotion changes
+        from backend.database.models import SENTIMENT_MAPPING
+        auto_score = SENTIMENT_MAPPING.get(emotion_key, 0.0)
+        self.sentiment_slider.blockSignals(True)
+        self.sentiment_slider.setValue(int(round(auto_score * 10)))
+        self.sentiment_slider.blockSignals(False)
+        self._update_sentiment_display(auto_score)
+        if self._current_clip:
+            self._current_clip["sentiment_score"] = auto_score
+
+        # Update timeline bar display
+        self.timeline_bar.update()
+        self._save_current_review(show_message=False)
+
+
+    def _on_approve(self):
+        if not self._current_clip:
+            return
+        if not self._current_clip.get("user_emotion"):
+            self._current_clip["user_emotion"] = self._current_clip.get("ai_emotion")
+        # Auto-populate sentiment_score if user hasn't set it explicitly
+        if self._current_clip.get("sentiment_score") is None:
+            from backend.database.models import SENTIMENT_MAPPING
+            emotion = self._current_clip.get("user_emotion") or self._current_clip.get("ai_emotion") or "neutral"
+            self._current_clip["sentiment_score"] = SENTIMENT_MAPPING.get(emotion, 0.0)
+        self._update_status("approved")
+        self._go_next()
+
+    def _on_reject(self):
+        if not self._current_clip:
+            return
+        self._update_status("rejected")
+        self._go_next()
+
+    def _on_gemini_verify(self):
+        """Gọi Gemini để verify/re-score clip hiện tại."""
+        if not self._current_clip:
+            return
+
+        clip_path = self._current_clip.get("clip_path")
+        if not clip_path or not os.path.exists(clip_path):
+            QMessageBox.warning(
+                self, "Không tìm thấy clip",
+                f"Không tìm được file clip: {clip_path}"
+            )
+            return
+
+        self.gemini_btn.setEnabled(False)
+        self.gemini_btn.setText("🤖 Đang phân tích...")
+        QApplication.processEvents()
+
+        try:
+            from backend.services.gemini_auto_labeler import GeminiAutoLabeler
+            labeler = GeminiAutoLabeler()
+
+            configured, msg = labeler.is_configured()
+            if not configured:
+                QMessageBox.warning(
+                    self, "Chua cau hinh Gemini",
+                    f"Khong the goi Gemini:\n{msg}\n\n"
+                    "Chay: gcloud auth application-default login"
+                )
+                return
+
+            result = labeler.analyze_clip(clip_path=clip_path, intensity_threshold=0.5)
+            analysis = result.get("analysis", {})
+
+            if isinstance(analysis, dict):
+                emotion = analysis.get("emotion") or analysis.get("predicted_emotion")
+                intensity = analysis.get("intensity") or analysis.get("confidence", 0)
+                reasoning = analysis.get("reasoning", "")
+
+                # Cập nhật UI
+                self._current_clip["gem_confidence"] = intensity
+                self._current_clip["gem_emotion"] = emotion
+                self._current_clip["gem_reasoning"] = reasoning
+
+                # Highlight emotion button nếu khác với hiện tại
+                if emotion and emotion != self._current_clip.get("ai_emotion"):
+                    reply = QMessageBox.question(
+                        self, "Gemini đề xuất nhãn khác",
+                        f"Gemini gợi ý nhãn: **{emotion.upper()}** (confidence: {intensity:.0%})\n\n"
+                        f"Reasoning: {reasoning}\n\n"
+                        f"Có muốn áp dụng không?",
+                        QMessageBox.Yes | QMessageBox.No,
+                    )
+                    if reply == QMessageBox.Yes:
+                        self._set_emotion(emotion)
+                        self._save_current_review()
+
+                # Hiển thị kết quả
+                QMessageBox.information(
+                    self, "Gemini Verify Hoàn Tất",
+                    f"Emotion: {emotion or 'N/A'}\n"
+                    f"Confidence: {intensity:.1%}\n"
+                    f"Cost: ${result.get('total_cost_usd', 0):.4f}\n\n"
+                    f"Reasoning: {reasoning[:200]}"
+                )
+            else:
+                QMessageBox.warning(self, "Kết quả không hợp lệ", str(analysis))
+
+        except ImportError as exc:
+            QMessageBox.critical(
+                self, "Thiếu thư viện",
+                f"google.genai chưa được cài hoặc Vertex AI credentials chưa được cấu hình:\n{exc}\n\n"
+                "Chạy: pip install google-genai\n"
+                "Hoặc: gcloud auth application-default login"
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi Gemini", str(exc))
+        finally:
+            self.gemini_btn.setEnabled(True)
+            self.gemini_btn.setText("🤖  Gemini Verify")
+
+    def _save_current_review(self, show_message: bool = True):
         if not self._current_clip:
             return
         try:
@@ -669,32 +1367,43 @@ class ReviewPage(QWidget):
             try:
                 clip = session.query(Clip).filter(Clip.id == self._current_clip["id"]).first()
                 if clip:
-                    clip.human_emotion = emotion_key
+                    clip.user_emotion = self._current_clip.get("user_emotion")
+                    clip.sentiment_score = self._current_clip.get("sentiment_score")
+                    clip.reviewer_notes = self.notes_text.toPlainText().strip()
+                    clip.reviewed_at = datetime.utcnow()
                     session.commit()
-                    self._current_clip["human_emotion"] = emotion_key
+                    self._current_clip["reviewer_notes"] = clip.reviewer_notes
+                else:
+                    raise RuntimeError("Clip no longer exists in database")
             finally:
                 session.close()
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to save label: {e}")
+            if show_message:
+                self.video_summary.setText("Review saved")
+        except Exception as exc:
+            QMessageBox.warning(self, "Save failed", str(exc))
 
     def _update_status(self, new_status: str):
-        """Update clip status in database"""
-        if not self._current_clip:
-            return
         try:
             from backend.database.local_db import get_session
             from backend.database.models import Clip
-            from datetime import datetime
 
             session = get_session()
             try:
                 clip = session.query(Clip).filter(Clip.id == self._current_clip["id"]).first()
                 if clip:
                     clip.status = new_status
+                    clip.user_emotion = self._current_clip.get("user_emotion")
+                    clip.sentiment_score = self._current_clip.get("sentiment_score")
+                    clip.reviewer_notes = self.notes_text.toPlainText().strip()
                     clip.reviewed_at = datetime.utcnow()
                     session.commit()
                     self._current_clip["status"] = new_status
+                    self._current_clip["reviewer_notes"] = clip.reviewer_notes
+                else:
+                    raise RuntimeError("Clip no longer exists in database")
             finally:
                 session.close()
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to update status: {e}")
+            self._populate_lists()
+            self._select_clip(min(self._current_index, len(self._clips) - 1))
+        except Exception as exc:
+            QMessageBox.warning(self, "Update status failed", str(exc))

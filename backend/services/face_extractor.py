@@ -1,207 +1,210 @@
-import os
-import cv2
+"""Face extraction service for Vietnamese drama/movie clips.
+
+Primary detector: facenet-pytorch MTCNN when available.
+Fallback: OpenCV Haar cascade so clips remain processable offline.
+Also writes detections.json for review overlay bounding boxes with stable-ish
+track_id assignment using lightweight IoU tracking.
+"""
+
+from __future__ import annotations
+
+import json
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
-import numpy as np
+from typing import Any, Dict
+
+import cv2
+
 from backend.config import settings
-from backend.ai_models.model_manager import model_manager
+
 
 class FaceExtractor:
-    """Lớp xử lý trích xuất khuôn mặt, tracking nhân vật chính và crop ảnh 224x224."""
-    
-    def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = output_dir or (settings.DATA_DIR / "frames")
+    def __init__(self, output_dir: Path | None = None, sample_frames: int = 24):
+        self.output_dir = output_dir or (settings.DATA_DIR / "faces")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.fps_sample_rate = 2.0  # Lấy mẫu 2 frames mỗi giây (cách nhau 0.5s)
+        self.sample_frames = sample_frames
 
     def extract_faces_from_clip(self, clip_path: str, clip_id: str) -> Dict[str, Any]:
-        """Phát hiện và tracking khuôn mặt trong clip, crop khuôn mặt nhân vật chính."""
-        if not os.path.exists(clip_path):
-            raise FileNotFoundError(f"Không tìm thấy clip tại: {clip_path}")
-            
-        clip_frames_dir = self.output_dir / clip_id
-        clip_frames_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Mở clip bằng OpenCV
-        cap = cv2.VideoCapture(clip_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        if fps <= 0:
-            fps = 25.0
-            
-        # Tính khoảng cách giữa các frames cần lấy mẫu
-        frame_interval = max(1, int(fps / self.fps_sample_rate))
-        
-        frame_idx = 0
-        sampled_frames = []
-        
-        # Cố gắng nạp InsightFace thông qua ModelManager
-        detector = None
+        clip = Path(clip_path)
+        if not clip.exists():
+            raise FileNotFoundError(f"Clip not found: {clip_path}")
+
+        clip_dir = self.output_dir / clip_id
+        clip_dir.mkdir(parents=True, exist_ok=True)
+        frames = self._sample_frames(str(clip))
+        detector_name = "mtcnn"
         try:
-            detector = model_manager.load_model("insightface")
-        except Exception as e:
-            print(f"Không thể load InsightFace detector ({e}), thử fallback sang OpenCV Haar Cascades...")
-            # Fallback sang Haar Cascade mặc định của OpenCV nếu không có GPU/InsightFace
-            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-            detector = cv2.CascadeClassifier(cascade_path)
-            
-        detected_tracks: Dict[int, List[Dict[str, Any]]] = {} # track_id -> list of bounding boxes
-        frame_detections = []
-        
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
+            face_paths, detections = self._detect_mtcnn(frames, clip_dir)
+        except Exception:
+            detector_name = "opencv_haar"
+            face_paths, detections = self._detect_opencv(frames, clip_dir)
+
+        detections = self._assign_track_ids(detections)
+        detections_path = clip_dir / "detections.json"
+        detections_path.write_text(json.dumps(detections, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        return {
+            "cropped_face_paths": face_paths,
+            "detections_path": str(detections_path),
+            "detections": detections,
+            "num_frames": len(frames),
+            "num_faces": len(face_paths),
+            "main_track_len": len(face_paths),
+            "detector": detector_name,
+            "track_count": self._count_tracks(detections),
+        }
+
+    def _sample_frames(self, clip_path: str) -> list[tuple[float, Any]]:
+        cap = cv2.VideoCapture(clip_path)
+        if not cap.isOpened():
+            raise RuntimeError(f"Could not open clip: {clip_path}")
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
+        step = max(1, total // max(1, self.sample_frames)) if total else 1
+        frames: list[tuple[float, Any]] = []
+        idx = 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
                 break
-                
-            if frame_idx % frame_interval == 0:
-                h, w, _ = frame.shape
-                # Detect khuôn mặt trong frame
-                bboxes = [] # Danh sách bounding boxes trong frame này: [x1, y1, x2, y2]
-                
-                if isinstance(detector, cv2.CascadeClassifier):
-                    # Sử dụng OpenCV Haar Cascade detector
-                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-                    for (x, y, fw, fh) in faces:
-                        bboxes.append([x, y, x + fw, y + fh, 0.9]) # mock confidence
-                else:
-                    # Sử dụng InsightFace detector
-                    try:
-                        faces = detector.get(frame)
-                        for face in faces:
-                            box = face.bbox.astype(int)
-                            bboxes.append([box[0], box[1], box[2], box[3], face.det_score])
-                    except Exception as ex:
-                        print(f"Lỗi khi chạy InsightFace: {ex}")
-                        
-                frame_detections.append({
-                    "frame_time": frame_idx / fps,
-                    "frame_data": frame,
-                    "bboxes": bboxes
-                })
-                
-            frame_idx += 1
-            
+            if idx % step == 0:
+                frames.append((round(idx / fps, 3), frame))
+                if len(frames) >= self.sample_frames:
+                    break
+            idx += 1
         cap.release()
-        
-        # --- TRACKING GIẢ LẬP (BYTE-TRACK SIMPLIFIED) ---
-        # gom các bounding box của cùng một người qua các frame bằng độ phủ hình học (IoU)
-        next_track_id = 0
-        active_tracks: Dict[int, List[float]] = {} # track_id -> last bounding box [x1, y1, x2, y2]
-        
-        def calculate_iou(boxA, boxB):
-            xA = max(boxA[0], boxB[0])
-            yA = max(boxA[1], boxB[1])
-            xB = min(boxA[2], boxB[2])
-            yB = min(boxA[3], boxB[3])
-            interArea = max(0, xB - xA) * max(0, yB - yA)
-            boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
-            boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
-            if boxAArea + boxBArea - interArea == 0:
-                return 0
-            iou = interArea / float(boxAArea + boxBArea - interArea)
-            return iou
-            
-        for f_det in frame_detections:
-            bboxes = f_det["bboxes"]
-            frame_img = f_det["frame_data"]
-            frame_time = f_det["frame_time"]
-            
-            matched_bboxes = set()
-            
-            # Khớp bboxes mới với các tracks đang hoạt động
-            for track_id, last_box in list(active_tracks.items()):
-                best_iou = 0.0
-                best_bbox_idx = -1
-                
-                for idx, bbox in enumerate(bboxes):
-                    if idx in matched_bboxes:
+        return frames
+
+    def _detect_mtcnn(self, frames: list[tuple[float, Any]], clip_dir: Path) -> tuple[list[str], list[dict]]:
+        from PIL import Image
+        from backend.ai_models.model_manager import model_manager
+        mtcnn = model_manager.load_model("mtcnn")
+        paths: list[str] = []
+        detections: list[dict] = []
+        for i, (timestamp, frame) in enumerate(frames):
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil = Image.fromarray(rgb)
+            boxes, probs = mtcnn.detect(pil)
+            frame_faces = []
+            if boxes is not None:
+                for j, box in enumerate(boxes[:5]):
+                    conf = float(probs[j]) if probs is not None and probs[j] is not None else 0.0
+                    if conf < 0.85:
                         continue
-                    iou = calculate_iou(last_box, bbox[:4])
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_bbox_idx = idx
-                        
-                if best_iou > 0.3: # Ngưỡng IoU cho tracking
-                    matched_bboxes.add(best_bbox_idx)
-                    matched_box = bboxes[best_bbox_idx]
-                    active_tracks[track_id] = matched_box[:4]
-                    
-                    if track_id not in detected_tracks:
-                        detected_tracks[track_id] = []
-                    detected_tracks[track_id].append({
-                        "bbox": matched_box[:4],
-                        "frame_time": frame_time,
-                        "frame_img": frame_img
+                    x1, y1, x2, y2 = [int(max(0, v)) for v in box]
+                    crop = frame[y1:y2, x1:x2]
+                    if crop.size == 0:
+                        continue
+                    out = clip_dir / f"face_{i:03d}_{j}.jpg"
+                    cv2.imwrite(str(out), crop)
+                    paths.append(str(out))
+                    frame_faces.append({
+                        "face_id": j,
+                        "bbox": [x1, y1, x2, y2],
+                        "confidence": conf,
+                        "crop_path": str(out),
+                        "detector": "mtcnn",
                     })
+            detections.append({
+                "timestamp": timestamp,
+                "frame_size": [int(frame.shape[1]), int(frame.shape[0])],
+                "faces": frame_faces,
+            })
+        return paths, detections
+
+    def _detect_opencv(self, frames: list[tuple[float, Any]], clip_dir: Path) -> tuple[list[str], list[dict]]:
+        cascade = self._load_haar_cascade()
+        if cascade is None or cascade.empty():
+            return [], [
+                {"timestamp": timestamp, "frame_size": [int(frame.shape[1]), int(frame.shape[0])], "faces": []}
+                for timestamp, frame in frames
+            ]
+        paths: list[str] = []
+        detections: list[dict] = []
+        for i, (timestamp, frame) in enumerate(frames):
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(40, 40))
+            frame_faces = []
+            for j, (x, y, w, h) in enumerate(faces[:5]):
+                crop = frame[y:y + h, x:x + w]
+                out = clip_dir / f"face_{i:03d}_{j}.jpg"
+                cv2.imwrite(str(out), crop)
+                paths.append(str(out))
+                frame_faces.append({
+                    "face_id": j,
+                    "bbox": [int(x), int(y), int(x + w), int(y + h)],
+                    "confidence": 0.60,
+                    "crop_path": str(out),
+                    "detector": "opencv_haar",
+                })
+            detections.append({
+                "timestamp": timestamp,
+                "frame_size": [int(frame.shape[1]), int(frame.shape[0])],
+                "faces": frame_faces,
+            })
+        return paths, detections
+
+    def _load_haar_cascade(self):
+        candidates = [
+            Path(getattr(cv2.data, "haarcascades", "")) / "haarcascade_frontalface_default.xml",
+            Path(cv2.__file__).resolve().parent / "data" / "haarcascade_frontalface_default.xml",
+        ]
+        for candidate in candidates:
+            try:
+                cascade = cv2.CascadeClassifier(str(candidate))
+                if not cascade.empty():
+                    return cascade
+            except Exception:
+                continue
+        return None
+
+    def _assign_track_ids(self, detections: list[dict]) -> list[dict]:
+        next_track_id = 0
+        active_tracks: dict[int, dict] = {}
+        max_age_frames = 2
+        for frame in detections:
+            assigned_tracks: set[int] = set()
+            for face in frame.get("faces", []):
+                bbox = face.get("bbox") or []
+                best_track = None
+                best_iou = 0.0
+                for track_id, track in active_tracks.items():
+                    if track_id in assigned_tracks or track.get("age", 0) > max_age_frames:
+                        continue
+                    score = self._bbox_iou(bbox, track.get("bbox", []))
+                    if score > best_iou:
+                        best_iou = score
+                        best_track = track_id
+                if best_track is not None and best_iou >= 0.25:
+                    track_id = best_track
                 else:
-                    # Hủy active track nếu không còn tìm thấy trong frame này
-                    active_tracks.pop(track_id)
-                    
-            # Các bboxes không được khớp -> Tạo track mới
-            for idx, bbox in enumerate(bboxes):
-                if idx not in matched_bboxes:
                     track_id = next_track_id
                     next_track_id += 1
-                    active_tracks[track_id] = bbox[:4]
-                    
-                    detected_tracks[track_id] = [{
-                        "bbox": bbox[:4],
-                        "frame_time": frame_time,
-                        "frame_img": frame_img
-                    }]
-                    
-        # --- CHỌN NHÂN VẬT CHÍNH ---
-        # Nhân vật chính là track xuất hiện nhiều nhất và có kích thước bounding box lớn nhất
-        main_track_id = -1
-        max_score = -1.0
-        
-        for track_id, track_data in detected_tracks.items():
-            num_occurrences = len(track_data)
-            # Tính kích thước trung bình của bbox
-            avg_area = np.mean([
-                (d["bbox"][2] - d["bbox"][0]) * (d["bbox"][3] - d["bbox"][1])
-                for d in track_data
-            ])
-            # Điểm đánh giá mức độ chính = số frame xuất hiện * diện tích
-            score = num_occurrences * avg_area
-            if score > max_score:
-                max_score = score
-                main_track_id = track_id
-                
-        # --- CROP & LƯU KHUÔN MẶT ---
-        cropped_face_paths = []
-        if main_track_id != -1:
-            main_track_data = detected_tracks[main_track_id]
-            for i, data in enumerate(main_track_data):
-                bbox = data["bbox"]
-                img = data["frame_img"]
-                
-                h, w, _ = img.shape
-                # Giới hạn bounding box trong khung hình
-                x1 = max(0, int(bbox[0]))
-                y1 = max(0, int(bbox[1]))
-                x2 = min(w, int(bbox[2]))
-                y2 = min(h, int(bbox[3]))
-                
-                if x2 > x1 and y2 > y1:
-                    face_crop = img[y1:y2, x1:x2]
-                    # Resize về 224x224 chuẩn cho các mô hình CNN/ViT
-                    face_crop_resized = cv2.resize(face_crop, (224, 224))
-                    
-                    # Lưu file ảnh
-                    face_filename = f"face_{i:04d}.jpg"
-                    face_path = clip_frames_dir / face_filename
-                    cv2.imwrite(str(face_path), face_crop_resized)
-                    cropped_face_paths.append(str(face_path.resolve()))
-                    
-        num_faces_detected = sum(len(f["bboxes"]) for f in frame_detections)
-        
-        return {
-            "num_frames": len(frame_detections),
-            "num_faces": num_faces_detected,
-            "main_track_len": len(cropped_face_paths),
-            "frames_dir": str(clip_frames_dir.resolve()),
-            "cropped_face_paths": cropped_face_paths
-        }
+                face["track_id"] = track_id
+                active_tracks[track_id] = {"bbox": bbox, "age": 0}
+                assigned_tracks.add(track_id)
+            for track_id in list(active_tracks.keys()):
+                if track_id not in assigned_tracks:
+                    active_tracks[track_id]["age"] = active_tracks[track_id].get("age", 0) + 1
+                    if active_tracks[track_id]["age"] > max_age_frames:
+                        active_tracks.pop(track_id, None)
+        return detections
+
+    @staticmethod
+    def _bbox_iou(a: list, b: list) -> float:
+        if len(a) != 4 or len(b) != 4:
+            return 0.0
+        ax1, ay1, ax2, ay2 = [float(v) for v in a]
+        bx1, by1, bx2, by2 = [float(v) for v in b]
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+        inter = max(0.0, inter_x2 - inter_x1) * max(0.0, inter_y2 - inter_y1)
+        area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+        area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+        denom = area_a + area_b - inter
+        return inter / denom if denom > 0 else 0.0
+
+    @staticmethod
+    def _count_tracks(detections: list[dict]) -> int:
+        return len({face.get("track_id") for frame in detections for face in frame.get("faces", []) if face.get("track_id") is not None})

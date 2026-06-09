@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bảng Điều Khiển — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item active">
+        <i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span>
+      </a>
+      <a href="/review" class="nav-item">
+        <i data-feather="eye"></i><span>Kiểm Duyệt</span>
+      </a>
+      <a href="/harvest" class="nav-item">
+        <i data-feather="download"></i><span>Thu Hoạch</span>
+      </a>
+      <a href="/settings" class="nav-item">
+        <i data-feather="sliders"></i><span>Cài Đặt</span>
+      </a>
+      <a href="/export" class="nav-item">
+        <i data-feather="package"></i><span>Xuất Dữ Liệu</span>
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status">
+        <i data-feather="cpu"></i>
+        <span id="gpuLabel">Đang kiểm tra...</span>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">Bảng Điều Khiển</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" onclick="location.reload()">
+          <i data-feather="refresh-cw"></i>
+        </button>
+        <div class="topbar-badge">
+          <i data-feather="clock"></i>
+          <span id="queueCount">--</span> chờ
+        </div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- Overall progress -->
+      <div class="card">
+        <div class="section-title">Tiến Trình Tổng Thể</div>
+        <div style="margin-bottom:10px;">
+          <span style="font-size:20px;font-weight:700;color:var(--success)" id="approvedCount">0</span>
+          <span style="color:var(--text-muted)"> / </span>
+          <span style="color:var(--text-muted)" id="targetTotal">3,000</span>
+          <span style="color:var(--text-muted)"> clips đã duyệt (</span>
+          <span id="approvalRate">0</span><span style="color:var(--text-muted)">%)</span>
+        </div>
+        <div class="progress-bar" style="height:14px;border-radius:7px;margin-bottom:6px;">
+          <div class="progress-fill success" id="overallProgress" style="width:0%"></div>
+        </div>
+        <div class="flex-between" style="font-size:12px;color:var(--text-muted)">
+          <span>Auto-approved: <strong id="autoApproved">0</strong></span>
+          <span>Human reviewed: <strong id="humanReviewed">0</strong></span>
+          <span>Pending: <strong id="pendingReview">0</strong></span>
+        </div>
+      </div>
+
+      <!-- Stats grid + Emotion quota -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="section-title">Thống Kê</div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-value" id="totalVideos">0</div>
+              <div class="stat-label">Videos</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" id="totalClips">0</div>
+              <div class="stat-label">Tổng Clips</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value success" id="approvedStat">0</div>
+              <div class="stat-label">Đã Duyệt</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value error" id="rejectedStat">0</div>
+              <div class="stat-label">Bị Loại</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value warning" id="queuePending">0</div>
+              <div class="stat-label">Queue</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value accent" id="queueRunning">0</div>
+              <div class="stat-label">Đang xử lý</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Phân Bổ Cảm Xúc</div>
+          <div class="emotion-list" id="emotionQuotaList">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- System status -->
+      <div class="card">
+        <div class="section-title">Trạng Thái Hệ Thống</div>
+        <div class="clip-meta" style="gap:16px;font-size:13px;">
+          <div class="clip-meta-item">
+            <span class="clip-meta-label">GPU</span>
+            <span class="clip-meta-value" id="gpuInfo">--</span>
+          </div>
+          <div class="clip-meta-item">
+            <span class="clip-meta-label">Queue pending</span>
+            <span class="clip-meta-value" id="queuePendingVal">--</span>
+          </div>
+          <div class="clip-meta-item">
+            <span class="clip-meta-label">Queue running</span>
+            <span class="clip-meta-value" id="queueRunningVal">--</span>
+          </div>
+          <div class="clip-meta-item">
+            <span class="clip-meta-label">Queue completed</span>
+            <span class="clip-meta-value" id="queueCompleted">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

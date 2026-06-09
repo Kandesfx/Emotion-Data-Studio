@@ -24,7 +24,9 @@ def create_video(video_in: VideoCreate, db: Session = Depends(get_db)):
         title=video_in.title,
         movie_name=video_in.movie_name,
         source_url=video_in.source_url,
+        source_type=video_in.source_type,
         file_path=video_in.file_path,
+        target_emotion=video_in.target_emotion,
         status="pending"
     )
     

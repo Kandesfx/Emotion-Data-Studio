@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thu Hoạch — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item"><i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span></a>
+      <a href="/review" class="nav-item"><i data-feather="eye"></i><span>Kiểm Duyệt</span></a>
+      <a href="/harvest" class="nav-item active"><i data-feather="download"></i><span>Thu Hoạch</span></a>
+      <a href="/settings" class="nav-item"><i data-feather="sliders"></i><span>Cài Đặt</span></a>
+      <a href="/export" class="nav-item"><i data-feather="package"></i><span>Xuất Dữ Liệu</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status"><i data-feather="cpu"></i><span id="gpuLabel">--</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">Thu Hoạch Video</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" onclick="location.reload()"><i data-feather="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- URL Import -->
+      <div class="card">
+        <div class="section-title">Thêm Video Mới</div>
+        <div class="form-group">
+          <label>Paste URLs (mỗi dòng 1 URL):</label>
+          <textarea id="urlInput" rows="5" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=...&#10;https://www.youtube.com/@channel/videos"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Target Emotion (ưu tiên thu thập):</label>
+          <div class="checkbox-group" id="targetEmotionGroup">
+            <label class="checkbox-item"><input type="checkbox" value="happy"> Happy</label>
+            <label class="checkbox-item"><input type="checkbox" value="sad"> Sad</label>
+            <label class="checkbox-item"><input type="checkbox" value="angry"> Angry</label>
+            <label class="checkbox-item"><input type="checkbox" value="fear"> Fear</label>
+            <label class="checkbox-item"><input type="checkbox" value="surprise"> Surprise</label>
+            <label class="checkbox-item"><input type="checkbox" value="disgust"> Disgust</label>
+            <label class="checkbox-item"><input type="checkbox" value="any" checked> Any</label>
+          </div>
+        </div>
+        <div class="flex-row">
+          <button class="btn btn-primary" id="importBtn">
+            <i data-feather="plus-circle"></i> Import URLs
+          </button>
+          <button class="btn btn-ghost" id="importAndStartBtn">
+            <i data-feather="play-circle"></i> Import &amp; Start Processing
+          </button>
+          <span id="importStatus" style="font-size:12px;color:var(--text-muted);margin-left:12px;"></span>
+        </div>
+      </div>
+
+      <!-- Queue -->
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:14px;">
+          <div class="section-title" style="margin:0;">Queue (<span id="queueTotal">0</span> videos)</div>
+          <div class="flex-row">
+            <button class="btn btn-ghost" id="pauseQueueBtn" style="padding:5px 10px;font-size:11px;">
+              <i data-feather="pause"></i> Pause
+            </button>
+            <button class="btn btn-ghost" id="resumeQueueBtn" style="padding:5px 10px;font-size:11px;">
+              <i data-feather="play"></i> Resume
+            </button>
+            <button class="btn btn-ghost" id="startPipelineBtn" style="padding:5px 10px;font-size:11px;">
+              <i data-feather="zap"></i> Start Pipeline
+            </button>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Started</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody id="queueTableBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No videos in queue</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Log -->
+      <div class="card">
+        <div class="section-title">Pipeline Log</div>
+        <div class="log-viewer" id="pipelineLog">
+          <div class="log-line">Ready. Import URLs above to start processing.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script src="/static/js/harvest.js"></script>
+</body>
+</html>

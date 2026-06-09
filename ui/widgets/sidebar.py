@@ -1,138 +1,142 @@
 """
 Emotion Data Studio — Sidebar Navigation Widget
-=================================================
-Animated sidebar with icon + text navigation buttons.
-Supports collapse/expand animation.
+================================================
+Collapsible sidebar with icon-based navigation, version badge, and
+smooth hover/active transitions.
 """
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSizePolicy, QSpacerItem, QFrame
-)
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QSize
-from PySide6.QtGui import QIcon, QFont
+from __future__ import annotations
 
-from ui.styles.theme import Colors, Spacing, Sizes, Typography
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ui.styles.theme import Sizes
+
+
+# Unicode icons that render well in most system fonts
+NAV_ITEMS = [
+    ("⊙",  "Bảng Điều Khiển", 0),
+    ("▶",  "Quản Lý Video",   1),
+    ("⚙",  "Xử Lý",           2),
+    ("✂",  "Soạn Đoạn",         3),
+    ("◉",  "Kiểm Duyệt",      4),
+    ("↑",  "Xuất & Đồng Bộ",  5),
+    ("≡",  "Cài Đặt",          6),
+]
 
 
 class SidebarButton(QPushButton):
-    """
-    Sidebar navigation button with icon + text.
-    Supports checked/active state.
-    """
+    """Individual navigation button with icon + label."""
 
-    def __init__(self, icon_text: str, label: str, page_index: int, parent=None):
+    def __init__(self, icon: str, label: str, page_index: int, parent=None):
         super().__init__(parent)
         self.page_index = page_index
-        self.icon_text = icon_text
-        self.label_text = label
+        self._icon = icon
+        self._label = label
+        self._build()
 
-        self.setText(f"  {icon_text}   {label}")
+    def _build(self):
         self.setObjectName("sidebarBtn")
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(42)
-        self.setToolTip(label)
+        self.setMinimumHeight(44)
+        self.setToolTip(self._label)
+        self.setText(f" {self._icon}   {self._label}")
+        self.setFlat(True)
 
 
 class Sidebar(QWidget):
-    """
-    Left sidebar navigation panel.
-    Emits page_changed signal when user clicks a nav button.
-    """
+    """Left navigation panel — fixed width with page routing."""
 
-    page_changed = Signal(int)  # Emits page index
-
-    # Navigation items: (icon_emoji, label, page_index)
-    NAV_ITEMS = [
-        ("📊", "Dashboard", 0),
-        ("⚙️", "Processing", 1),
-        ("🎭", "Review Studio", 2),
-        ("📦", "Export & Sync", 3),
-    ]
+    page_changed = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("sidebar")
         self.setFixedWidth(Sizes.SIDEBAR_WIDTH_EXPANDED)
-        self.setMinimumHeight(400)
-
         self._buttons: list[SidebarButton] = []
         self._current_index = 0
-
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 0, 8, 8)
-        layout.setSpacing(2)
+        layout.setContentsMargins(10, 0, 10, 12)
+        layout.setSpacing(0)
 
-        # --- Logo section ---
-        logo_label = QLabel("🎬 EDS")
-        logo_label.setObjectName("sidebarLogo")
-        layout.addWidget(logo_label)
+        # ── Logo header ───────────────────────────────────────────────────
+        header = QWidget()
+        header.setObjectName("sidebarHeader")
+        header.setFixedHeight(80)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(10, 14, 10, 8)
+        header_layout.setSpacing(2)
 
-        version_label = QLabel("Emotion Data Studio v1.0.0")
-        version_label.setObjectName("sidebarVersion")
-        layout.addWidget(version_label)
+        logo = QLabel("Emotion Data Studio")
+        logo.setObjectName("sidebarLogo")
+        logo.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header_layout.addWidget(logo)
 
-        # --- Separator ---
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background-color: rgba(255,255,255,0.06); max-height: 1px;")
-        layout.addWidget(sep)
+        try:
+            from backend.config import settings
+            ver = settings.VERSION
+        except Exception:
+            ver = "1.1.0"
+
+        version = QLabel(f"v{ver}")
+        version.setObjectName("sidebarVersion")
+        version.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        header_layout.addWidget(version)
+
+        layout.addWidget(header)
+
+        # ── Divider ───────────────────────────────────────────────────────
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.HLine)
+        divider.setObjectName("sidebarDivider")
+        divider.setFixedHeight(1)
+        layout.addWidget(divider)
         layout.addSpacing(8)
 
-        # --- Section label ---
-        nav_title = QLabel("NAVIGATION")
-        nav_title.setObjectName("sidebarTitle")
-        layout.addWidget(nav_title)
-
-        # --- Navigation buttons ---
-        for icon, label, index in self.NAV_ITEMS:
-            btn = SidebarButton(icon, label, index, self)
-            btn.clicked.connect(lambda checked, idx=index: self._on_button_clicked(idx))
+        # ── Nav buttons ───────────────────────────────────────────────────
+        for icon, label, index in NAV_ITEMS:
+            btn = SidebarButton(icon, label, index)
+            btn.clicked.connect(lambda checked=False, i=index: self.set_page(i, emit=True))
             self._buttons.append(btn)
             layout.addWidget(btn)
+            layout.addSpacing(2)
 
-        # --- Spacer ---
-        layout.addSpacerItem(QSpacerItem(
-            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        ))
+        layout.addStretch()
 
-        # --- Bottom section ---
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet("background-color: rgba(255,255,255,0.06); max-height: 1px;")
-        layout.addWidget(sep2)
-        layout.addSpacing(4)
+        # ── Bottom info ───────────────────────────────────────────────────
+        bottom_divider = QFrame()
+        bottom_divider.setFrameShape(QFrame.Shape.HLine)
+        bottom_divider.setObjectName("sidebarDivider")
+        bottom_divider.setFixedHeight(1)
+        layout.addWidget(bottom_divider)
+        layout.addSpacing(10)
 
-        # Settings button
-        settings_btn = SidebarButton("⚙️", "Settings", -1, self)
-        settings_btn.setCheckable(False)
-        settings_btn.clicked.connect(self._on_settings_clicked)
-        layout.addWidget(settings_btn)
+        build_label = QLabel("BCDA Team · 2025")
+        build_label.setObjectName("sidebarFooter")
+        build_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(build_label)
 
-        # Set first button active
-        self._set_active(0)
+        self.set_page(0, emit=False)
 
-    def _on_button_clicked(self, index: int):
-        """Handle navigation button click"""
-        if index == self._current_index:
-            return
-        self._set_active(index)
-        self.page_changed.emit(index)
-
-    def _set_active(self, index: int):
-        """Set the active button by index"""
+    def set_page(self, index: int, emit: bool = False):
         self._current_index = index
         for btn in self._buttons:
             btn.setChecked(btn.page_index == index)
+        if emit:
+            self.page_changed.emit(index)
 
-    def _on_settings_clicked(self):
-        """Open settings dialog (placeholder)"""
-        pass  # Will be connected to SettingsDialog
-
-    def set_page(self, index: int):
-        """Programmatically set the active page"""
-        self._set_active(index)
+    def current_page(self) -> int:
+        return self._current_index

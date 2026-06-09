@@ -34,11 +34,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("EDS-Cloud")
 
+from backend.config import settings
+
 # Create FastAPI app
 app = FastAPI(
     title="Emotion Data Studio API",
     description="Cloud API for data synchronization and team collaboration",
-    version="1.0.0",
+    version=settings.VERSION,
 )
 
 # CORS
@@ -63,7 +65,7 @@ logger.info("Database initialized")
 @app.get("/health")
 async def health():
     """Health check endpoint for Cloud Run"""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "version": settings.VERSION}
 
 
 @app.get("/api/status")
@@ -94,10 +96,14 @@ try:
     from backend.api.videos import router as videos_router
     from backend.api.clips import router as clips_router
     from backend.api.labels import router as labels_router
+    from backend.api.stats import router as stats_router
 
-    app.include_router(videos_router, prefix="/api/videos", tags=["videos"])
-    app.include_router(clips_router, prefix="/api/clips", tags=["clips"])
-    app.include_router(labels_router, prefix="/api/labels", tags=["labels"])
+    # Routers already have internal prefix (/videos, /clips, etc.)
+    # Only add /api at the app level
+    app.include_router(videos_router, prefix="/api", tags=["videos"])
+    app.include_router(clips_router, prefix="/api", tags=["clips"])
+    app.include_router(labels_router, prefix="/api", tags=["labels"])
+    app.include_router(stats_router, prefix="/api", tags=["stats"])
     logger.info("API routers loaded")
 except ImportError as e:
     logger.warning(f"Could not load API routers: {e}")
@@ -107,24 +113,84 @@ except ImportError as e:
 # Sync Endpoints
 # ============================================================
 
-@app.post("/api/sync/upload")
+@app.post("/api/sync/upload", tags=["sync"])
 async def sync_upload(data: dict):
     """
     Receive sync data from desktop app.
     Desktop → Cloud SQL.
     """
-    # TODO: Implement sync receive endpoint
-    return {"status": "received", "records": 0}
+    try:
+        from backend.cloud.sync_manager import SyncManager
+        manager = SyncManager()
+        report = manager.sync_metadata(direction="upload")
+        return {"status": "success", "report": report}
+    except Exception as e:
+        logger.error(f"Sync upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/sync/download")
+@app.get("/api/sync/download", tags=["sync"])
 async def sync_download(since: str = None):
     """
     Send sync data to desktop app.
     Cloud SQL → Desktop.
     """
-    # TODO: Implement sync send endpoint
-    return {"status": "ok", "records": [], "since": since}
+    try:
+        from backend.cloud.sync_manager import SyncManager
+        manager = SyncManager()
+        report = manager.sync_metadata(direction="download")
+        return {"status": "success", "report": report}
+    except Exception as e:
+        logger.error(f"Sync download failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sync/files", tags=["sync"])
+async def sync_files_upload(sync_videos: bool = False, sync_clips: bool = True, sync_audio: bool = True):
+    """
+    Upload processed files to Google Cloud Storage.
+    """
+    try:
+        from backend.cloud.sync_manager import SyncManager
+        manager = SyncManager()
+        report = manager.sync_files(
+            sync_videos=sync_videos,
+            sync_clips=sync_clips,
+            sync_audio=sync_audio,
+        )
+        return {"status": "success", "report": report}
+    except Exception as e:
+        logger.error(f"File sync failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sync/status", tags=["sync"])
+async def sync_status():
+    """Get current sync status."""
+    try:
+        from backend.cloud.sync_manager import SyncManager
+        manager = SyncManager()
+        return {
+            "available": manager.is_available,
+            "last_sync": manager.get_sync_status(),
+        }
+    except Exception as e:
+        return {"available": False, "error": str(e)}
+
+
+@app.post("/api/sync/full", tags=["sync"])
+async def sync_full(sync_videos: bool = False):
+    """
+    Run full bidirectional sync (metadata + files).
+    """
+    try:
+        from backend.cloud.sync_manager import SyncManager
+        manager = SyncManager()
+        report = manager.full_sync(sync_videos=sync_videos)
+        return {"status": "success", "report": report}
+    except Exception as e:
+        logger.error(f"Full sync failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

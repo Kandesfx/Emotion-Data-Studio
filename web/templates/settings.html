@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cài Đặt — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item"><i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span></a>
+      <a href="/review" class="nav-item"><i data-feather="eye"></i><span>Kiểm Duyệt</span></a>
+      <a href="/harvest" class="nav-item"><i data-feather="download"></i><span>Thu Hoạch</span></a>
+      <a href="/settings" class="nav-item active"><i data-feather="sliders"></i><span>Cài Đặt</span></a>
+      <a href="/export" class="nav-item"><i data-feather="package"></i><span>Xuất Dữ Liệu</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status"><i data-feather="cpu"></i><span id="gpuLabel">--</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">Cài Đặt Pipeline</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" onclick="location.reload()"><i data-feather="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- Segmentation -->
+      <div class="card">
+        <div class="section-title">Segmentation Thresholds</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Scene Threshold</label>
+            <input type="number" id="sceneThreshold" step="0.1" min="10" max="60" value="30.0" />
+          </div>
+          <div class="form-group">
+            <label>Min Clip Duration (s)</label>
+            <input type="number" id="minClipDuration" step="0.5" min="1" max="30" value="3.0" />
+          </div>
+          <div class="form-group">
+            <label>Max Clip Duration (s)</label>
+            <input type="number" id="maxClipDuration" step="0.5" min="5" max="60" value="15.0" />
+          </div>
+          <div class="form-group">
+            <label>Target Clip Duration (s)</label>
+            <input type="number" id="targetClipDuration" step="0.5" min="2" max="30" value="6.0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Face detection -->
+      <div class="card">
+        <div class="section-title">Face Detection</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Face Confidence Threshold</label>
+            <input type="number" id="faceConfidence" step="0.05" min="0.1" max="1.0" value="0.55" />
+          </div>
+          <div class="form-group">
+            <label>Face Scan FPS</label>
+            <input type="number" id="faceScanFps" step="0.5" min="0.5" max="10" value="2.0" />
+          </div>
+          <div class="form-group">
+            <label>Max Missing Face Gap (s)</label>
+            <input type="number" id="maxMissingFaceGap" step="0.1" min="0" max="5" value="1.0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto-decision thresholds -->
+      <div class="card">
+        <div class="section-title">Auto-Decision Criteria</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Auto-Approve Quality Score ≥</label>
+            <input type="number" id="autoApproveQuality" step="0.01" min="0" max="1" value="0.80" />
+          </div>
+          <div class="form-group">
+            <label>Auto-Approve Confidence ≥</label>
+            <input type="number" id="autoApproveConfidence" step="0.01" min="0" max="1" value="0.70" />
+          </div>
+          <div class="form-group">
+            <label>Auto-Reject SNR (dB) &lt;</label>
+            <input type="number" id="autoRejectSnr" step="1" min="0" max="30" value="5" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Agreement (e.g. "3/3,2/3")</label>
+          <input type="text" id="autoApproveAgreement" value="3/3,2/3" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" id="saveSettingsBtn">
+          <i data-feather="save"></i> Lưu Cài Đặt
+        </button>
+        <span id="saveStatus" style="font-size:12px;color:var(--success);align-self:center;"></span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script>
+  // Load settings on page load
+  fetch('/api/settings')
+    .then(r => r.json())
+    .then(data => {
+      const map = {
+        sceneThreshold: 'scene_threshold',
+        minClipDuration: 'min_clip_duration',
+        maxClipDuration: 'max_clip_duration',
+        targetClipDuration: 'smart_target_clip_duration',
+        faceConfidence: 'smart_face_confidence',
+        faceScanFps: 'smart_face_scan_fps',
+        maxMissingFaceGap: 'smart_max_missing_face_gap',
+      };
+      for (const [id, key] of Object.entries(map)) {
+        const el = document.getElementById(id);
+        if (el && data[key] !== undefined) el.value = data[key];
+      }
+    });
+
+  document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+    const pipeline = {
+      scene_threshold: parseFloat(document.getElementById('sceneThreshold').value),
+      min_clip_duration: parseFloat(document.getElementById('minClipDuration').value),
+      max_clip_duration: parseFloat(document.getElementById('maxClipDuration').value),
+      smart_target_clip_duration: parseFloat(document.getElementById('targetClipDuration').value),
+      smart_face_confidence: parseFloat(document.getElementById('faceConfidence').value),
+      smart_face_scan_fps: parseFloat(document.getElementById('faceScanFps').value),
+      smart_max_missing_face_gap: parseFloat(document.getElementById('maxMissingFaceGap').value),
+    };
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pipeline}),
+    })
+    .then(r => r.json())
+    .then(() => {
+      const el = document.getElementById('saveStatus');
+      el.textContent = '✅ Đã lưu!';
+      setTimeout(() => el.textContent = '', 3000);
+    });
+  });
+</script>
+</body>
+</html>

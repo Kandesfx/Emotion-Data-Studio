@@ -29,16 +29,16 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# Version Info
+# Version Info — Single Source of Truth from backend/config.py
 # ============================================================
 
-CURRENT_VERSION = "1.0.0"
-
-# R2 update URL — change to your actual Cloudflare R2 public URL
-UPDATE_BASE_URL = os.getenv(
-    "EDS_UPDATE_URL",
-    "https://updates.your-domain.com/releases"
-)
+try:
+    from backend.config import settings
+    CURRENT_VERSION = settings.VERSION
+    UPDATE_BASE_URL = settings.EDS_UPDATE_URL or "https://pub-74b3008a5f904815b3951f8d440264cc.r2.dev"
+except ImportError:
+    CURRENT_VERSION = "1.0.0"
+    UPDATE_BASE_URL = os.getenv("EDS_UPDATE_URL", "https://pub-74b3008a5f904815b3951f8d440264cc.r2.dev")
 
 
 @dataclass
@@ -301,22 +301,67 @@ class UpdateManager:
             )
 
     def _on_download_finished(self, filepath: str):
-        """Launch installer and quit app"""
+        """Launch installer silently and quit app to trigger automatic update and restart"""
         self._progress.close()
 
-        reply = QMessageBox.question(
-            self.parent, "Cập nhật đã tải xong",
-            "Khởi động lại ứng dụng để cài đặt cập nhật?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        # Thông báo cho người dùng ứng dụng sẽ đóng để cập nhật tự động
+        msg = QMessageBox(self.parent)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("Cập nhật ứng dụng")
+        msg.setText("Cập nhật đã tải xong!")
+        msg.setInformativeText(
+            "Ứng dụng sẽ tự động đóng để tiến hành cài đặt bản cập nhật mới và khởi động lại sau vài giây."
         )
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
-        if reply == QMessageBox.StandardButton.Yes:
-            # Launch installer
-            import subprocess
-            subprocess.Popen([filepath, "/SILENT"], shell=True)
-            # Quit current app
-            from PySide6.QtWidgets import QApplication
-            QApplication.instance().quit()
+        import subprocess
+        import sys
+
+        # Chạy trình cài đặt trên Windows
+        if sys.platform == "win32":
+            filepath_esc = filepath.replace("'", "''")
+            exe_path_esc = sys.executable.replace("'", "''")
+            
+            if getattr(sys, 'frozen', False):
+                args_list = ""
+            else:
+                args_list = f"'{os.path.abspath(sys.argv[0])}'"
+
+            if args_list:
+                args_list_esc = args_list.replace("'", "''")
+                start_app_cmd = f"Start-Process '{exe_path_esc}' -ArgumentList {args_list_esc}"
+            else:
+                start_app_cmd = f"Start-Process '{exe_path_esc}'"
+
+            # Lệnh PowerShell chạy ẩn:
+            # 1. Chờ 2 giây để app cha giải phóng tài nguyên và đóng file lock
+            # 2. Chạy bộ cài đặt ở chế độ /SILENT (chỉ hiển thị thanh tiến trình cài đặt, không cần tương tác)
+            # 3. Tự động khởi chạy lại ứng dụng mới sau khi cài đặt hoàn tất
+            ps_cmd = (
+                f"Start-Sleep -s 2; "
+                f"Start-Process '{filepath_esc}' -ArgumentList '/SILENT /SUPPRESSMSGBOXES /NORESTART' -Wait; "
+                f"{start_app_cmd}"
+            )
+
+            creationflags = subprocess.CREATE_NO_WINDOW | getattr(subprocess, 'DETACHED_PROCESS', 0x00000008)
+            logger.info("Launching silent update via background PowerShell helper...")
+            try:
+                subprocess.Popen(
+                    ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                    creationflags=creationflags
+                )
+            except Exception as e:
+                logger.error(f"Failed to launch background updater: {e}")
+                # Fallback chạy installer dạng UI thông thường nếu có lỗi xảy ra
+                subprocess.Popen([filepath], shell=True)
+        else:
+            # Chạy trực tiếp trên các OS khác nếu được hỗ trợ
+            subprocess.Popen([filepath], shell=True)
+
+        # Thoát ứng dụng hiện tại
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().quit()
 
     def _on_download_failed(self, error: str):
         """Show download error"""

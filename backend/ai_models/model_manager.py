@@ -1,141 +1,153 @@
+"""Central lazy model registry for Emotion Data Studio.
+
+The desktop pipeline must be able to run on machines with partial model
+availability. This manager therefore:
+- lazy-loads heavy models once
+- reports unavailable models without crashing the whole app
+- exposes a stable set of model keys used by services
+"""
+
+from __future__ import annotations
+
 import os
-from pathlib import Path
-from typing import Dict, Any, Optional
-import torch
-from backend.config import settings
+from dataclasses import dataclass
+from typing import Any, Callable
 
-class AIModelManager:
-    """Quản lý nạp động (Lazy Loading) các mô hình AI lên GPU hoặc CPU, tối ưu hóa bộ nhớ."""
-    
-    _instance = None
-    
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(AIModelManager, cls).__new__(cls, *args, **kwargs)
-            cls._instance._initialized = False
-        return cls._instance
-        
+
+@dataclass
+class ModelStatus:
+    key: str
+    loaded: bool
+    error: str | None = None
+
+
+class FasterWhisperAdapter:
+    """Adapter để faster-whisper có interface gần giống openai-whisper."""
+
+    def __init__(self, model: Any):
+        self.model = model
+
+    def transcribe(self, audio_path: str, **kwargs) -> dict:
+        segments, info = self.model.transcribe(
+            audio_path,
+            language=kwargs.get("language"),
+            task=kwargs.get("task", "transcribe"),
+            beam_size=5,
+            vad_filter=True,
+            initial_prompt=kwargs.get("initial_prompt"),
+        )
+        rows = []
+        texts = []
+        for seg in segments:
+            text = (seg.text or "").strip()
+            if text:
+                texts.append(text)
+            rows.append({
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": text,
+            })
+        return {
+            "text": " ".join(texts),
+            "segments": rows,
+            "language": getattr(info, "language", kwargs.get("language", "vi")),
+        }
+
+
+class ModelManager:
     def __init__(self):
-        if self._initialized:
-            return
-            
-        self.device = torch.device("cuda" if torch.cuda.is_available() and settings.USE_GPU else "cpu")
-        self.cache_dir = settings.MODEL_CACHE_DIR
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Dictionary lưu giữ các instances mô hình đã được load vào RAM/VRAM
-        self._loaded_models: Dict[str, Any] = {}
-        self._initialized = True
-        print(f"🤖 Khởi tạo AIModelManager sử dụng thiết bị: {self.device.type.upper()}")
+        self._models: dict[str, Any] = {}
+        self._errors: dict[str, str] = {}
+        self._loaders: dict[str, Callable[[], Any]] = {
+            "whisper": self._load_whisper,
+            "deepface": self._load_deepface,
+            "mtcnn": self._load_mtcnn,
+            "text_emotion": self._load_text_emotion,
+            "audio_emotion": self._load_audio_emotion,
+        }
 
-    def get_device(self) -> torch.device:
-        """Trả về thiết bị xử lý hiện tại (cuda hoặc cpu)."""
-        return self.device
+    def load_model(self, key: str) -> Any:
+        if key in self._models:
+            return self._models[key]
+        if key not in self._loaders:
+            raise KeyError(f"Unknown model key: {key}")
+        try:
+            model = self._loaders[key]()
+            self._models[key] = model
+            self._errors.pop(key, None)
+            return model
+        except Exception as exc:
+            self._errors[key] = str(exc)
+            raise
 
-    def load_model(self, model_name: str) -> Any:
-        """Tải mô hình lên bộ nhớ theo cơ chế Lazy Loading."""
-        if model_name in self._loaded_models:
-            return self._loaded_models[model_name]
-            
-        print(f"🧠 Đang nạp mô hình '{model_name}' lên {self.device.type.upper()}...")
-        
-        model_instance = None
-        
-        if model_name == "hsemotion":
-            # Lazy load thư viện HSEmotion
-            from hsemotion.facial_emotions import HSEmotionRecognizer
-            # hsemotion tự động download weights và cache
-            # Ở đây ta sử dụng model ViT_b_AffectNet (SOTA của hsemotion)
-            model_instance = HSEmotionRecognizer(
-                model_name='mtcnn_pro',  # dùng MTCNN để align khuôn mặt trước khi nhận diện
-                device=self.device.type
-            )
-            
-        elif model_name == "deepface":
-            # DeepFace quản lý weights rất tốt, chúng ta import và load
-            from deepface import DeepFace
-            # Chúng ta chỉ verify bằng cách gọi dummy building để trigger downloading weights
-            # Model mặc định là VGG-Face cho nhận dạng khuôn mặt, Emotion model cho phân tích
-            # Trả về đối tượng thư viện gốc để wrap sử dụng
-            model_instance = DeepFace
-            
-        elif model_name == "phobert_sentiment":
-            # Load PhoBERT sentiment SOTA của tiếng Việt
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
-            
-            model_path = "wonrax/phobert-base-vietnamese-sentiment"
-            tokenizer = AutoTokenizer.from_pretrained(model_path, cache_dir=str(self.cache_dir))
-            model = AutoModelForSequenceClassification.from_pretrained(model_path, cache_dir=str(self.cache_dir))
-            model.to(self.device)
-            
-            # Đóng gói pipeline
-            model_instance = pipeline(
-                "sentiment-analysis",
-                model=model,
-                tokenizer=tokenizer,
-                device=0 if self.device.type == "cuda" else -1
-            )
-            
-        elif model_name == "wav2vec_emotion":
-            # Phân tích cảm xúc âm thanh qua Wav2Vec2-emotion
-            from transformers import Wav2Vec2Processor, AutoModelForAudioClassification
-            
-            # Model nhận diện cảm xúc giọng nói đa ngôn ngữ / tiếng Việt tốt
-            model_path = "harshit345/xlsr-wav2vec-speech-emotion-recognition"
-            processor = Wav2Vec2Processor.from_pretrained(model_path, cache_dir=str(self.cache_dir))
-            model = AutoModelForAudioClassification.from_pretrained(model_path, cache_dir=str(self.cache_dir))
-            model.to(self.device)
-            
-            model_instance = {
-                "processor": processor,
-                "model": model
-            }
-            
-        elif model_name == "whisper":
-            # Tải Whisper model cho Speech-to-Text
+    def get_model(self, key: str) -> Any | None:
+        try:
+            return self.load_model(key)
+        except Exception:
+            return None
+
+    def prewarm_models(self, keys: list[str] | None = None) -> tuple[int, int]:
+        # Prewarm only the core models needed for the current data-mining workflow.
+        # Text/audio emotion models are optional and loaded lazily to avoid slowing
+        # down Vietnamese video processing when visual labeling is the priority.
+        keys = keys or ["whisper", "deepface", "mtcnn"]
+        loaded = 0
+        failed = 0
+        for key in keys:
+            try:
+                self.load_model(key)
+                loaded += 1
+            except Exception:
+                failed += 1
+        return loaded, failed
+
+    def status(self) -> list[ModelStatus]:
+        keys = sorted(self._loaders)
+        return [ModelStatus(key, key in self._models, self._errors.get(key)) for key in keys]
+
+    def _device(self) -> str:
+        try:
+            from backend.utils.resource_manager import resource_manager
+            return resource_manager.apply().device
+        except Exception:
+            try:
+                import torch
+                return "cuda" if torch.cuda.is_available() else "cpu"
+            except Exception:
+                return "cpu"
+
+    def _load_whisper(self):
+        model_name = os.getenv("EDS_WHISPER_MODEL", "medium")
+        try:
             import whisper
-            # Chúng ta mặc định dùng model "base" hoặc "small" cho môi trường local để tiết kiệm tài nguyên
-            # Người dùng có thể nâng cấp lên "large-v3" thông qua settings
-            model_size = os.getenv("EDS_WHISPER_SIZE", "base")
-            model_instance = whisper.load_model(
-                model_size, 
-                device=self.device,
-                download_root=str(self.cache_dir / "whisper")
-            )
-            
-        elif model_name == "insightface":
-            # Load insightface face analysis
-            import insightface
-            # Sử dụng model pack buffalo_l
-            app = insightface.app.FaceAnalysis(
-                name='buffalo_l',
-                root=str(self.cache_dir / "insightface"),
-                allowed_modules=['detection'] # Chỉ cần detection cho tác vụ crop face
-            )
-            app.prepare(ctx_id=0 if self.device.type == "cuda" else -1, det_size=(640, 640))
-            model_instance = app
-            
-        else:
-            raise ValueError(f"Không nhận dạng được tên mô hình AI: {model_name}")
-            
-        self._loaded_models[model_name] = model_instance
-        print(f"✅ Đã nạp thành công mô hình '{model_name}'.")
-        return model_instance
+            return whisper.load_model(model_name, device=self._device())
+        except Exception as openai_exc:
+            try:
+                from faster_whisper import WhisperModel
+                device = self._device()
+                compute_type = "float16" if device == "cuda" else "int8"
+                model = WhisperModel(model_name, device=device, compute_type=compute_type)
+                return FasterWhisperAdapter(model)
+            except Exception as faster_exc:
+                raise RuntimeError(
+                    f"Không load được Whisper. openai-whisper: {openai_exc}; faster-whisper: {faster_exc}"
+                ) from faster_exc
 
-    def unload_model(self, model_name: str):
-        """Giải phóng bộ nhớ GPU/RAM của một mô hình khi không còn sử dụng."""
-        if model_name in self._loaded_models:
-            del self._loaded_models[model_name]
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-            print(f"🧹 Đã giải phóng bộ nhớ cho mô hình '{model_name}'.")
+    def _load_deepface(self):
+        from deepface import DeepFace
+        return DeepFace
 
-    def unload_all_models(self):
-        """Giải phóng bộ nhớ cho tất cả các mô hình."""
-        self._loaded_models.clear()
-        if self.device.type == "cuda":
-            torch.cuda.empty_cache()
-        print("🧹 Đã dọn sạch tất cả các mô hình AI khỏi VRAM/RAM.")
+    def _load_mtcnn(self):
+        from facenet_pytorch import MTCNN
+        return MTCNN(keep_all=True, device=self._device())
 
-# Khởi tạo instance duy nhất
-model_manager = AIModelManager()
+    def _load_audio_emotion(self):
+        from backend.ai_models.audio_emotion_model import audio_emotion_classifier
+        return audio_emotion_classifier
+
+    def _load_text_emotion(self):
+        from backend.ai_models.text_emotion_model import text_emotion_classifier
+        return text_emotion_classifier
+
+
+model_manager = ModelManager()

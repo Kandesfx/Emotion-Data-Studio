@@ -24,6 +24,7 @@ Pillow>=10.0.0
 yt-dlp>=2024.1.0            # YouTube video downloader
 scenedetect[opencv]>=0.6.2  # Scene detection & splitting
 openai-whisper>=20231117     # Speech-to-Text
+faster-whisper                # Faster GPU/CPU Whisper fallback
 deepface>=0.0.89             # Face analysis & pre-labeling
 facenet-pytorch>=2.5.3       # MTCNN face detection
 

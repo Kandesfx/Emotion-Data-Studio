@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kiểm Duyệt — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item"><i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span></a>
+      <a href="/review" class="nav-item active"><i data-feather="eye"></i><span>Kiểm Duyệt</span></a>
+      <a href="/harvest" class="nav-item"><i data-feather="download"></i><span>Thu Hoạch</span></a>
+      <a href="/settings" class="nav-item"><i data-feather="sliders"></i><span>Cài Đặt</span></a>
+      <a href="/export" class="nav-item"><i data-feather="package"></i><span>Xuất Dữ Liệu</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status"><i data-feather="cpu"></i><span id="gpuLabel">--</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">Kiểm Duyệt Clips</div>
+      <div class="topbar-actions">
+        <span class="topbar-badge"><i data-feather="eye"></i> <span id="pendingCount">--</span> cần duyệt</span>
+        <button class="btn btn-icon" onclick="location.reload()"><i data-feather="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page-content" style="flex-direction:row;gap:20px;align-items:flex-start;">
+      <!-- Clip list -->
+      <div class="card" style="width:280px;min-width:280px;flex-shrink:0;max-height:calc(100vh - 100px);overflow-y:auto;padding:14px;">
+        <div class="section-title" style="margin-bottom:10px;">Danh Sách Clip</div>
+        <div id="clipList" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <!-- Preview area -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-width:0;">
+        <!-- Video + transcript -->
+        <div class="grid-2">
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="video-wrap" style="border-radius:0;">
+              <video id="clipVideo" controls style="width:100%;display:block;background:#000;">
+                Your browser does not support video.
+              </video>
+            </div>
+          </div>
+          <div class="card">
+            <div class="clip-meta" id="clipMeta">
+              <div class="clip-meta-item"><span class="clip-meta-label">Clip ID</span><span class="clip-meta-value" id="mId">--</span></div>
+              <div class="clip-meta-item"><span class="clip-meta-label">Video</span><span class="clip-meta-value" id="mVideo">--</span></div>
+              <div class="clip-meta-item"><span class="clip-meta-label">Duration</span><span class="clip-meta-value" id="mDuration">--</span></div>
+              <div class="clip-meta-item"><span class="clip-meta-label">Face Quality</span><span class="clip-meta-value" id="mFace">--</span></div>
+              <div class="clip-meta-item"><span class="clip-meta-label">SNR</span><span class="clip-meta-value" id="mSnr">--</span></div>
+              <div class="clip-meta-item"><span class="clip-meta-label">Quality Score</span><span class="clip-meta-value" id="mQuality">--</span></div>
+            </div>
+            <div style="margin-top:14px;">
+              <div class="section-title">Transcript</div>
+              <p id="clipTranscript" style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic;">--</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Prediction -->
+        <div class="card">
+          <div class="section-title">AI Prediction</div>
+          <div class="clip-meta" id="aiPrediction" style="gap:16px;">
+            <div class="clip-meta-item">
+              <span class="clip-meta-label">Emotion</span>
+              <span class="clip-meta-value" id="aiEmotion" style="font-size:16px;font-weight:700;color:var(--primary)">--</span>
+            </div>
+            <div class="clip-meta-item">
+              <span class="clip-meta-label">Confidence</span>
+              <span class="clip-meta-value" id="aiConfidence">--</span>
+            </div>
+            <div class="clip-meta-item">
+              <span class="clip-meta-label">Agreement</span>
+              <span class="clip-meta-value" id="aiAgreement">--</span>
+            </div>
+            <div class="clip-meta-item">
+              <span class="clip-meta-label">Incongruity</span>
+              <span class="clip-meta-value" id="aiIncongruity">--</span>
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;" id="perModelScores">
+            <!-- Per-model scores filled by JS -->
+          </div>
+        </div>
+
+        <!-- Human labeling -->
+        <div class="card">
+          <div class="section-title">Gán Nhãn Cảm Xúc</div>
+
+          <div style="margin-bottom:16px;">
+            <div class="section-title" style="font-size:11px;margin-bottom:8px;">Sentiment Slider</div>
+            <div class="sentiment-slider-wrap">
+              <input type="range" class="sentiment-slider" id="sentimentSlider" min="-3" max="3" step="0.1" value="0" />
+              <div class="slider-labels"><span>-3 (Negative)</span><span>0</span><span>+3 (Positive)</span></div>
+            </div>
+            <div style="text-align:center;font-weight:600;color:var(--primary);margin-top:4px;">
+              Sentiment: <span id="sentimentValue">0.0</span>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title" style="font-size:11px;margin-bottom:8px;">Emotion</div>
+            <div class="emotion-picker" id="emotionPicker">
+              <button class="emotion-btn" data-emotion="happy">Happy</button>
+              <button class="emotion-btn" data-emotion="sad">Sad</button>
+              <button class="emotion-btn" data-emotion="angry">Angry</button>
+              <button class="emotion-btn" data-emotion="fear">Fear</button>
+              <button class="emotion-btn" data-emotion="surprise">Surprise</button>
+              <button class="emotion-btn" data-emotion="disgust">Disgust</button>
+              <button class="emotion-btn" data-emotion="neutral">Neutral</button>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <label>Notes</label>
+            <textarea id="reviewNotes" placeholder="Ghi chú tùy chọn..." style="min-height:60px;"></textarea>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-success" id="btnApprove"><i data-feather="check-circle"></i> Approve</button>
+            <button class="btn btn-danger" id="btnReject"><i data-feather="x-circle"></i> Reject</button>
+            <button class="btn btn-ghost" id="btnSkip"><i data-feather="arrow-right"></i> Skip</button>
+            <button class="btn btn-primary" id="btnSave"><i data-feather="save"></i> Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script src="/static/js/review.js"></script>
+</body>
+</html>

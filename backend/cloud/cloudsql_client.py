@@ -15,7 +15,7 @@ import logging
 from typing import Optional
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ class CloudSQLClient:
         self.db_password = settings.CLOUD_SQL_PASSWORD
         self.db_name = settings.CLOUD_SQL_DB
         self.project_id = settings.GCP_PROJECT_ID
+        self.credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
 
         self._engine = None
         self._session_factory = None
@@ -80,6 +81,9 @@ class CloudSQLClient:
         try:
             from google.cloud.sql.connector import Connector
 
+            if self.credentials_path:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
+
             connector = Connector()
 
             def getconn():
@@ -101,7 +105,7 @@ class CloudSQLClient:
             )
             # Test connection
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             logger.info("Connected via Cloud SQL Python Connector")
             return engine
 
@@ -121,7 +125,7 @@ class CloudSQLClient:
             )
             engine = create_engine(db_url, pool_size=5, pool_timeout=10)
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             logger.info("Connected via Cloud SQL Auth Proxy")
             return engine
 
@@ -146,7 +150,7 @@ class CloudSQLClient:
                 )
                 engine = create_engine(db_url, pool_size=5, pool_timeout=10)
                 with engine.connect() as conn:
-                    conn.execute("SELECT 1")
+                    conn.execute(text("SELECT 1"))
                 logger.info(f"Connected via direct TCP: {host}:{port}")
                 return engine
 
@@ -207,7 +211,7 @@ class CloudSQLClient:
             start = time.time()
             self._get_engine()
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             latency = (time.time() - start) * 1000
 
             return {

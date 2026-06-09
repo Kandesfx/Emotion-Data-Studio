@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Auto-Label — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item"><i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span></a>
+      <a href="/review" class="nav-item"><i data-feather="eye"></i><span>Kiểm Duyệt</span></a>
+      <a href="/harvest" class="nav-item"><i data-feather="download"></i><span>Thu Hoạch</span></a>
+      <a href="/settings" class="nav-item"><i data-feather="sliders"></i><span>Cài Đặt</span></a>
+      <a href="/export" class="nav-item"><i data-feather="package"></i><span>Xuất Dữ Liệu</span></a>
+      <a href="/gemini" class="nav-item active"><i data-feather="cpu"></i><span>Gemini Label</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status"><i data-feather="cpu"></i><span id="gpuLabel">--</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">🤖 Gemini Auto-Label</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" onclick="location.reload()"><i data-feather="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- Status card -->
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:14px;">
+          <div class="section-title" style="margin:0;">Trạng Thái Gemini</div>
+          <div id="configStatus" class="badge badge-muted">Đang kiểm tra...</div>
+        </div>
+        <div class="clip-meta" id="geminiStatusInfo" style="gap:16px;">
+          <div class="clip-meta-item"><span class="clip-meta-label">Model</span><span class="clip-meta-value">gemini-2.5-flash</span></div>
+          <div class="clip-meta-item"><span class="clip-meta-label">Project</span><span class="clip-meta-value" id="statusProject">--</span></div>
+          <div class="clip-meta-item"><span class="clip-meta-label">GCS Bucket</span><span class="clip-meta-value" id="statusBucket">--</span></div>
+        </div>
+      </div>
+
+      <!-- Single video analyze -->
+      <div class="card">
+        <div class="section-title">Phân Tích 1 Video</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+          Upload video lên GCS → gọi Gemini 2.5 Flash phân tích → trả về các đoạn cảm xúc mạnh kèm nhãn.
+          Chi phí ước tính: ~$0.01-0.02 cho 1 phút video.
+        </p>
+        <div class="form-group">
+          <label>Đường dẫn video (local path)</label>
+          <input type="text" id="geminiVideoPath" placeholder="/content/drive/MyDrive/EDS/videos/video.mp4" />
+        </div>
+        <div class="form-row" style="margin-top:10px;">
+          <div class="form-group">
+            <label>Ngưỡng intensity (≥)</label>
+            <input type="number" id="geminiThreshold" value="0.6" min="0" max="1" step="0.05" />
+          </div>
+          <div class="form-group">
+            <label>Max segments</label>
+            <input type="number" id="geminiMaxSeg" value="20" min="1" max="50" />
+          </div>
+        </div>
+        <div class="flex-row" style="margin-top:12px;">
+          <button class="btn btn-primary" id="geminiAnalyzeBtn">
+            <i data-feather="play-circle"></i> Phân Tích Video
+          </button>
+          <span id="analyzeStatus" style="font-size:12px;color:var(--text-muted);margin-left:12px;"></span>
+        </div>
+      </div>
+
+      <!-- Cost estimator -->
+      <div class="card">
+        <div class="section-title">Ước Tính Chi Phí</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Thời lượng video (giây)</label>
+            <input type="number" id="costDuration" value="180" min="1" max="7200" />
+          </div>
+          <div class="form-group">
+            <label>Số videos dự kiến</label>
+            <input type="number" id="costVideos" value="100" min="1" max="10000" />
+          </div>
+        </div>
+        <div class="clip-meta" style="gap:14px;margin-top:8px;" id="costEstimate">
+          <div class="clip-meta-item"><span class="clip-meta-label">Giá/clip</span><span class="clip-meta-value" id="costPerClip">--</span></div>
+          <div class="clip-meta-item"><span class="clip-meta-label">Tổng (100 videos)</span><span class="clip-meta-value" id="costTotal">--</span></div>
+          <div class="clip-meta-item"><span class="clip-meta-label">Ngân sách còn lại</span><span class="clip-meta-value" id="costRemaining">--</span></div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text-muted);">
+          💡 Với ngân sách ~$1,000 USD (27 triệu VND), có thể phân tích khoảng
+          <strong id="budgetCoverage">--</strong> video clips.
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="card" id="resultsCard" style="display:none;">
+        <div class="section-title">Kết Quả — Emotional Segments</div>
+        <div id="resultsMeta" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
+        <div id="segmentResults" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="margin-top:14px;">
+          <button class="btn btn-success" id="applyAllBtn">
+            <i data-feather="check-circle"></i> Áp Dụng Tất Cả Lên Clips
+          </button>
+        </div>
+      </div>
+
+      <!-- Batch analyze -->
+      <div class="card">
+        <div class="section-title">Batch Analyze</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+          Phân tích nhiều video cùng lúc. Danh sách paths, mỗi dòng 1 video.
+        </p>
+        <div class="form-group">
+          <label>Danh sách video paths</label>
+          <textarea id="batchPaths" rows="5" placeholder="/path/to/video1.mp4&#10;/path/to/video2.mp4&#10;/path/to/video3.mp4"></textarea>
+        </div>
+        <div class="flex-row" style="margin-top:10px;">
+          <button class="btn btn-primary" id="batchAnalyzeBtn">
+            <i data-feather="layers"></i> Batch Analyze
+          </button>
+          <span id="batchStatus" style="font-size:12px;color:var(--text-muted);margin-left:12px;"></span>
+        </div>
+        <div id="batchResults" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+
+      <!-- Log -->
+      <div class="card">
+        <div class="section-title">Log</div>
+        <div class="log-viewer" id="geminiLog" style="max-height:160px;">
+          <div class="log-line">Ready. Nhập video path để bắt đầu.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script>
+  const API = '';
+
+  // Load status on page load
+  fetch('/api/gemini/status')
+    .then(r => r.json())
+    .then(data => {
+      const statusEl = document.getElementById('configStatus');
+      if (data.configured) {
+        statusEl.textContent = '✅ Sẵn sàng';
+        statusEl.className = 'badge badge-success';
+        document.getElementById('statusProject').textContent = data.project_id || '--';
+        document.getElementById('statusBucket').textContent = data.bucket || '--';
+      } else {
+        statusEl.textContent = '⚠️ Chưa cấu hình';
+        statusEl.className = 'badge badge-error';
+        addLog('Cấu hình lỗi: ' + data.message, 'error');
+      }
+    })
+    .catch(() => {
+      document.getElementById('configStatus').textContent = '❌ Lỗi kết nối';
+    });
+
+  // Update cost estimate
+  function updateCostEstimate() {
+    const duration = parseFloat(document.getElementById('costDuration').value) || 180;
+    const videos = parseInt(document.getElementById('costVideos').value) || 100;
+    fetch(`/api/gemini/estimate-cost?duration_sec=${duration}`)
+      .then(r => r.json())
+      .then(data => {
+        const total = data.estimated_total_usd || 0;
+        const budget = 1000;
+        document.getElementById('costPerClip').textContent = `$${total.toFixed(4)}`;
+        document.getElementById('costTotal').textContent = `$${(total * videos).toFixed(2)}`;
+        document.getElementById('costRemaining').textContent = `$${Math.max(0, budget - total * videos).toFixed(2)} / $${budget}`;
+        const coverage = Math.floor(budget / total);
+        document.getElementById('budgetCoverage').textContent = coverage.toLocaleString();
+      });
+  }
+  document.getElementById('costDuration').addEventListener('input', updateCostEstimate);
+  document.getElementById('costVideos').addEventListener('input', updateCostEstimate);
+  updateCostEstimate();
+
+  // Single analyze
+  document.getElementById('geminiAnalyzeBtn').addEventListener('click', async () => {
+    const videoPath = document.getElementById('geminiVideoPath').value.trim();
+    if (!videoPath) { addLog('Chưa nhập video path', 'error'); return; }
+    const threshold = parseFloat(document.getElementById('geminiThreshold').value) || 0.6;
+    const maxSeg = parseInt(document.getElementById('geminiMaxSeg').value) || 20;
+
+    const btn = document.getElementById('geminiAnalyzeBtn');
+    btn.disabled = true;
+    btn.textContent = '🤖 Đang phân tích...';
+    document.getElementById('analyzeStatus').textContent = 'Đang xử lý...';
+    addLog(`Bắt đầu phân tích: ${videoPath}`);
+
+    try {
+      const resp = await fetch('/api/gemini/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ video_path: videoPath, intensity_threshold: threshold, max_segments: maxSeg }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) throw new Error(data.detail || 'Unknown error');
+
+      addLog(`✅ Hoàn tất! Tìm thấy ${data.segment_count} đoạn cảm xúc mạnh`, 'success');
+      addLog(`   Video: ${data.video_duration.toFixed(1)}s | Chi phí: $${data.estimated_cost_usd}`, 'success');
+
+      renderResults(data);
+    } catch (err) {
+      addLog('❌ Lỗi: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-feather="play-circle"></i> Phân Tích Video';
+      feather.replace();
+      document.getElementById('analyzeStatus').textContent = '';
+    }
+  });
+
+  // Apply all segments
+  document.getElementById('applyAllBtn').addEventListener('click', async () => {
+    const videoId = document.getElementById('resultsCard').dataset.videoId;
+    const segments = window._currentSegments || [];
+    if (!segments.length) return;
+    try {
+      const resp = await fetch(`/api/gemini/segments/${videoId}/apply`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ segments }),
+      });
+      const result = await resp.json();
+      addLog(`✅ Áp dụng ${result.segments_applied} labels lên clips`, 'success');
+    } catch (err) {
+      addLog('❌ Lỗi apply: ' + err.message, 'error');
+    }
+  });
+
+  // Batch analyze
+  document.getElementById('batchAnalyzeBtn').addEventListener('click', async () => {
+    const text = document.getElementById('batchPaths').value.trim();
+    if (!text) { addLog('Chưa nhập danh sách video', 'error'); return; }
+    const paths = text.split('\n').map(p => p.trim()).filter(Boolean);
+    if (!paths.length) return;
+
+    const btn = document.getElementById('batchAnalyzeBtn');
+    btn.disabled = true;
+    document.getElementById('batchStatus').textContent = `Đang xử lý ${paths.length} videos...`;
+    addLog(`Batch: bắt đầu ${paths.length} videos`);
+
+    const threshold = parseFloat(document.getElementById('geminiThreshold').value) || 0.6;
+    try {
+      const resp = await fetch('/api/gemini/batch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ video_paths: paths, intensity_threshold: threshold }),
+      });
+      const data = await resp.json();
+      addLog(`✅ Batch hoàn tất: ${data.total_videos} videos, ${data.total_segments} segments`, 'success');
+      addLog(`   Tổng chi phí: $${data.estimated_total_cost_usd}`, 'success');
+      renderBatchResults(data.results || []);
+    } catch (err) {
+      addLog('❌ Batch lỗi: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('batchStatus').textContent = '';
+    }
+  });
+
+  // Render results
+  function renderResults(data) {
+    const card = document.getElementById('resultsCard');
+    card.style.display = 'block';
+    card.dataset.videoId = data.video_id || 'unknown';
+
+    document.getElementById('resultsMeta').textContent =
+      `${data.segment_count} segments | ${(data.video_duration || 0).toFixed(1)}s video | Chi phí: $${(data.estimated_cost_usd || 0).toFixed(4)}`;
+
+    window._currentSegments = data.segments || [];
+
+    const container = document.getElementById('segmentResults');
+    container.innerHTML = '';
+    const EMOTION_COLORS = {
+      happy: '#f59e0b', sad: '#3b82f6', angry: '#ef4444',
+      fear: '#a855f7', surprise: '#06b6d4', disgust: '#22c55e', neutral: '#6c63ff',
+    };
+
+    for (const seg of (data.segments || [])) {
+      const color = EMOTION_COLORS[seg.emotion] || '#6c63ff';
+      const duration = (seg.end_time - seg.start_time).toFixed(1);
+      const div = document.createElement('div');
+      div.className = 'card-elevated';
+      div.style.cssText = `border-left:3px solid ${color};padding:10px 14px;`;
+      div.innerHTML = `
+        <div class="flex-between">
+          <div>
+            <span style="font-weight:700;color:${color};font-size:14px;">${seg.emotion}</span>
+            <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">
+              ${seg.start_time.toFixed(1)}s – ${seg.end_time.toFixed(1)}s (${duration}s)
+            </span>
+          </div>
+          <div class="badge badge-neutral" style="font-size:12px;">
+            Intensity: ${(seg.intensity * 100).toFixed(0)}%
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;font-style:italic;">
+          ${seg.reasoning || ''}
+        </div>
+      `;
+      container.appendChild(div);
+    }
+
+    if (!data.segments || !data.segments.length) {
+      container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">Không tìm thấy đoạn cảm xúc mạnh nào</div>';
+    }
+  }
+
+  function renderBatchResults(results) {
+    const container = document.getElementById('batchResults');
+    container.innerHTML = '';
+    for (const r of results) {
+      const div = document.createElement('div');
+      if (r.error) {
+        div.innerHTML = `<span class="badge badge-error">❌</span> ${r.video_path}: ${r.error}`;
+      } else {
+        div.innerHTML = `<span class="badge badge-success">✅</span> ${r.video_path}: ${(r.segments || []).length} segments`;
+      }
+      container.appendChild(div);
+    }
+  }
+
+  function addLog(msg, type = '') {
+    const log = document.getElementById('geminiLog');
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' ' + type : '');
+    div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+</script>
+</body>
+</html>

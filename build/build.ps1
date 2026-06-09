@@ -33,7 +33,7 @@ $InstallerDir = Join-Path $ProjectRoot "installer"
 $SpecFile = Join-Path $BuildDir "emotion_studio.spec"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  Emotion Data Studio — Build Script v$Version" -ForegroundColor Cyan
+Write-Host "  Emotion Data Studio - Build Script v$Version" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -44,10 +44,19 @@ if (-not $SkipClean) {
     if (Test-Path (Join-Path $ProjectRoot "build/__pycache__")) {
         Remove-Item -Recurse -Force (Join-Path $ProjectRoot "build/__pycache__")
     }
-    Write-Host "  ✅ Clean complete" -ForegroundColor Green
+    Write-Host "  [OK] Clean complete" -ForegroundColor Green
 } else {
     Write-Host "[1/5] Skipping clean" -ForegroundColor DarkGray
 }
+
+# === Step 1.5: Stamp version into source ===
+Write-Host "[1.5/5] Stamping version into source code..." -ForegroundColor Yellow
+$configPath = Join-Path $ProjectRoot "backend\config.py"
+$configContent = Get-Content $configPath -Raw
+$originalVersionLine = ($configContent | Select-String 'VERSION:\s*str\s*=\s*"[^"]*"').Matches[0].Value
+$configContent = $configContent -replace 'VERSION:\s*str\s*=\s*"[^"]*"', "VERSION: str = `"$Version`""
+[System.IO.File]::WriteAllText($configPath, $configContent, [System.Text.UTF8Encoding]::new($false))
+Write-Host "  [OK] Version stamped: $Version" -ForegroundColor Green
 
 # === Step 2: PyInstaller ===
 Write-Host "[2/5] Running PyInstaller..." -ForegroundColor Yellow
@@ -65,14 +74,14 @@ if ($Debug) {
 
 Push-Location $ProjectRoot
 try {
-    & pyinstaller @pyinstallerArgs
+    & python -m PyInstaller @pyinstallerArgs
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller failed with exit code $LASTEXITCODE"
     }
 } finally {
     Pop-Location
 }
-Write-Host "  ✅ PyInstaller complete" -ForegroundColor Green
+Write-Host "  [OK] PyInstaller complete" -ForegroundColor Green
 
 # === Step 3: Copy external dependencies ===
 Write-Host "[3/5] Copying external dependencies..." -ForegroundColor Yellow
@@ -94,9 +103,9 @@ if (Test-Path $ffmpegPath) {
     New-Item -ItemType Directory -Path $binDir -Force | Out-Null
     Copy-Item (Join-Path $ProjectRoot "bin\ffmpeg.exe") $binDir
     Copy-Item (Join-Path $ProjectRoot "bin\ffprobe.exe") $binDir -ErrorAction SilentlyContinue
-    Write-Host "  ✅ FFmpeg copied" -ForegroundColor Green
+    Write-Host "  [OK] FFmpeg copied" -ForegroundColor Green
 } else {
-    Write-Host "  ⚠️  FFmpeg not found in bin/ — user will need system FFmpeg" -ForegroundColor Yellow
+    Write-Host "  [WARNING] FFmpeg not found in bin/ - user will need system FFmpeg" -ForegroundColor Yellow
 }
 
 # Copy QSS styles (should be in datas already, but ensure it)
@@ -105,7 +114,7 @@ if (-not (Test-Path $stylesDir)) {
     New-Item -ItemType Directory -Path $stylesDir -Force | Out-Null
 }
 Copy-Item (Join-Path $ProjectRoot "ui\styles\dark_theme.qss") $stylesDir -Force
-Write-Host "  ✅ Styles copied" -ForegroundColor Green
+Write-Host "  [OK] Styles copied" -ForegroundColor Green
 
 # === Step 4: Write version info ===
 Write-Host "[4/5] Writing version info..." -ForegroundColor Yellow
@@ -115,8 +124,8 @@ $versionInfo = @{
     python_version = (python --version 2>&1).ToString().Replace("Python ", "")
 } | ConvertTo-Json -Depth 2
 
-$versionInfo | Out-File -FilePath (Join-Path $AppDir "version.json") -Encoding utf8
-Write-Host "  ✅ Version info written" -ForegroundColor Green
+[System.IO.File]::WriteAllText((Join-Path $AppDir "version.json"), $versionInfo, [System.Text.UTF8Encoding]::new($false))
+Write-Host "  [OK] Version info written" -ForegroundColor Green
 
 # === Step 5: Inno Setup (optional) ===
 if (-not $SkipInstaller) {
@@ -136,7 +145,7 @@ if (-not $SkipInstaller) {
         if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE"
         }
-        Write-Host "  ✅ Installer created" -ForegroundColor Green
+        Write-Host "  [OK] Installer created" -ForegroundColor Green
     }
 } else {
     Write-Host "[5/5] Skipping installer" -ForegroundColor DarkGray

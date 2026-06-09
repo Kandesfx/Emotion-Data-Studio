@@ -2,11 +2,11 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
-from backend.database.local_db import engine, Base
-from backend.api import videos, clips, labels
+from backend.database.local_db import init_database
+from backend.api import videos, clips, labels, harvest, stats, gemini_api, colab_worker
 
 # Tự động tạo cấu trúc bảng SQLite cục bộ khi khởi chạy app
-Base.metadata.create_all(bind=engine)
+init_database()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -27,6 +27,10 @@ app.add_middleware(
 app.include_router(videos.router, prefix="/api")
 app.include_router(clips.router, prefix="/api")
 app.include_router(labels.router, prefix="/api")
+app.include_router(harvest.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
+app.include_router(gemini_api.router)
+app.include_router(colab_worker.router)
 
 @app.get("/")
 def read_root():

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Xuất Dữ Liệu — EDS Dashboard</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">EDS</div>
+      <div class="logo-text">Emotion<br>Data Studio</div>
+    </div>
+    <div class="nav-items">
+      <a href="/" class="nav-item"><i data-feather="bar-chart-2"></i><span>Bảng Điều Khiển</span></a>
+      <a href="/review" class="nav-item"><i data-feather="eye"></i><span>Kiểm Duyệt</span></a>
+      <a href="/harvest" class="nav-item"><i data-feather="download"></i><span>Thu Hoạch</span></a>
+      <a href="/settings" class="nav-item"><i data-feather="sliders"></i><span>Cài Đặt</span></a>
+      <a href="/export" class="nav-item active"><i data-feather="package"></i><span>Xuất Dữ Liệu</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="gpu-status"><i data-feather="cpu"></i><span id="gpuLabel">--</span></div>
+    </div>
+  </nav>
+
+  <main id="main">
+    <header class="topbar">
+      <div class="topbar-title">Xuất Dữ Liệu</div>
+      <div class="topbar-actions">
+        <button class="btn btn-icon" onclick="location.reload()"><i data-feather="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- Dataset preview -->
+      <div class="card">
+        <div class="section-title">Dataset Preview</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-value" id="exportTotal">0</div>
+            <div class="stat-label">Tổng Clips</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value success" id="exportApproved">0</div>
+            <div class="stat-label">Đã Duyệt</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="exportReady">0</div>
+            <div class="stat-label">Sẵn Sàng Export</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value accent" id="exportAligned">0</div>
+            <div class="stat-label">Aligned (có features)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export options -->
+      <div class="card">
+        <div class="section-title">Xuất MMSA .pkl</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+          Export dataset đã aligned thành file .pkl tương thích với MulT training.
+          File sẽ được lưu vào Google Drive: <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;">/content/drive/MyDrive/EDS/exports/</code>
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tên file output</label>
+            <input type="text" id="exportFileName" value="emotions_dataset.pkl" />
+          </div>
+          <div class="form-group">
+            <label>Output path</label>
+            <input type="text" id="exportPath" value="/content/drive/MyDrive/EDS/exports/" readonly style="background:var(--surface);color:var(--text-muted);" />
+          </div>
+        </div>
+        <div class="flex-row" style="margin-top:8px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="requireAlignedCheck" checked style="width:auto;" />
+            <span style="font-size:13px;">Chỉ export clips đã aligned (có features)</span>
+          </label>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+          <button class="btn btn-primary" id="exportBtn">
+            <i data-feather="download"></i> Export .pkl
+          </button>
+          <div id="exportProgress" style="flex:1;display:none;">
+            <div class="progress-bar">
+              <div class="progress-fill" id="exportProgressFill" style="width:0%"></div>
+            </div>
+          </div>
+          <span id="exportStatus" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <div class="card">
+        <div class="section-title">Download</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+          Tải dataset về local. Đảm bảo đã export .pkl trước.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>File path on Drive</label>
+            <input type="text" id="downloadFilePath" placeholder="/content/drive/MyDrive/EDS/exports/emotions_dataset.pkl" />
+          </div>
+          <div class="form-group" style="align-self:flex-end;">
+            <button class="btn btn-ghost" id="downloadBtn">
+              <i data-feather="download"></i> Download
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="card">
+        <div class="section-title">Export Log</div>
+        <div class="log-viewer" id="exportLog">
+          <div class="log-line">Ready. Export dataset above.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>feather.replace();</script>
+<script>
+  const DRIVE_EXPORT_BASE = '/content/drive/MyDrive/EDS/exports/';
+
+  function addLog(msg, type='') {
+    const log = document.getElementById('exportLog');
+    const div = document.createElement('div');
+    div.className = 'log-line' + (type ? ' ' + type : '');
+    div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Load preview stats
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('exportTotal').textContent = data.total_clips || 0;
+      document.getElementById('exportApproved').textContent = data.approved || 0;
+      document.getElementById('exportReady').textContent = data.approved || 0;
+    });
+
+  // Export
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    const fileName = document.getElementById('exportFileName').value || 'emotions_dataset.pkl';
+    const requireAligned = document.getElementById('requireAlignedCheck').checked;
+    const outputPath = DRIVE_EXPORT_BASE + fileName;
+
+    document.getElementById('exportProgress').style.display = 'block';
+    document.getElementById('exportBtn').disabled = true;
+    document.getElementById('exportStatus').textContent = 'Exporting...';
+    addLog('Starting export to ' + outputPath);
+
+    try {
+      const resp = await fetch('/api/export', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({output_path: outputPath, require_aligned: requireAligned}),
+      });
+      const result = await resp.json();
+
+      if (resp.ok) {
+        addLog('Export complete!', 'success');
+        document.getElementById('exportProgressFill').style.width = '100%';
+        document.getElementById('exportStatus').textContent = '✅ Done!';
+        document.getElementById('exportStatus').style.color = 'var(--success)';
+        document.getElementById('downloadFilePath').value = outputPath;
+        addLog(`Total clips: ${result.total_clips || 0}`, 'success');
+        addLog(`Train: ${result.train_clips || 0} | Val: ${result.valid_clips || 0} | Test: ${result.test_clips || 0}`, 'success');
+      } else {
+        addLog('Export failed: ' + (result.detail || 'Unknown error'), 'error');
+        document.getElementById('exportStatus').textContent = '❌ Failed';
+      }
+    } catch (err) {
+      addLog('Export error: ' + err.message, 'error');
+      document.getElementById('exportStatus').textContent = '❌ Error';
+    } finally {
+      document.getElementById('exportBtn').disabled = false;
+      setTimeout(() => {
+        document.getElementById('exportProgress').style.display = 'none';
+      }, 2000);
+    }
+  });
+</script>
+</body>
+</html>

@@ -19,6 +19,7 @@
 
 [Setup]
 AppId={#MyAppId}
+AppMutex={{B8C5D9E2-4F1A-4B7D-9E3C-8F2A1D5B6E7C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -48,7 +49,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 ; Architecture
 ArchitecturesAllowed=x64compatible
-ArchitecturesInstallMode=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -62,12 +63,17 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 Source: "..\dist\EmotionDataStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; === FFmpeg binaries (nếu có) ===
-Source: "..\bin\ffmpeg.exe"; DestDir: "{app}\bin"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\..\bin\ffmpeg.exe'))
-Source: "..\bin\ffprobe.exe"; DestDir: "{app}\bin"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{src}\..\bin\ffprobe.exe'))
+Source: "..\bin\ffmpeg.exe"; DestDir: "{app}\bin"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\bin\ffprobe.exe"; DestDir: "{app}\bin"; Flags: ignoreversion skipifsourcedoesntexist
+
+; === External downloader / runtime helpers (nếu có) ===
+Source: "..\bin\aria2c.exe"; DestDir: "{app}\bin"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\bin\deno.exe"; DestDir: "{app}\bin"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\bin\denort.exe"; DestDir: "{app}\bin"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; === Data directories (create empty if not exist) ===
 ; These will be created by the app on first run, but we ensure the structure exists
-Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist; Check: DirExists(ExpandConstant('{src}\..\data'))
+; Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist skipifsourcedoesntexist
 
 [Dirs]
 ; Ensure data directories exist with proper permissions
@@ -96,11 +102,11 @@ Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string
 Root: HKCU; Subkey: "Software\{#MyAppPublisher}\{#MyAppName}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
 
 ; Set environment variable for data directory (so backend/config.py can find it)
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_DATA_DIR"; ValueData: "{app}\data"; Flags: uninsdeletevalue
+; Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_DATA_DIR"; ValueData: "{app}\data"; Flags: uninsdeletevalue
 
 ; Set FFmpeg path
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_FFMPEG_PATH"; ValueData: "{app}\bin\ffmpeg.exe"; Flags: uninsdeletevalue
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_FFPROBE_PATH"; ValueData: "{app}\bin\ffprobe.exe"; Flags: uninsdeletevalue
+; Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_FFMPEG_PATH"; ValueData: "{app}\bin\ffmpeg.exe"; Flags: uninsdeletevalue
+; Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "EDS_FFPROBE_PATH"; ValueData: "{app}\bin\ffprobe.exe"; Flags: uninsdeletevalue
 
 [UninstallDelete]
 ; Clean up generated files on uninstall (but keep user data)
@@ -141,8 +147,8 @@ begin
   begin
     // Notify Windows of environment variable changes
     // This ensures EDS_DATA_DIR is available immediately
-    RegWriteStringValue(HKEY_CURRENT_USER, 'Environment', 'EDS_DATA_DIR', 
-                        ExpandConstant('{app}\data'));
+    // RegWriteStringValue(HKEY_CURRENT_USER, 'Environment', 'EDS_DATA_DIR', 
+    //                     ExpandConstant('{app}\data'));
   end;
 end;
 

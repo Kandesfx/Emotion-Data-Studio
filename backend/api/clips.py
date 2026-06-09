@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -57,7 +58,10 @@ def update_clip(
     # Cập nhật thông tin
     clip.status = clip_in.status
     clip.user_emotion = clip_in.user_emotion
+    clip.sentiment_score = clip_in.sentiment_score
     clip.reviewer_notes = clip_in.reviewer_notes
+    clip.reject_reason = clip_in.reject_reason
+    clip.decision_by = "human"
     clip.reviewed_at = datetime.utcnow()
     clip.updated_at = datetime.utcnow()
     
@@ -75,6 +79,27 @@ def update_clip(
         db.commit()
         
     return clip
+
+@router.get("/{clip_id}/video")
+def stream_clip_video(clip_id: str, db: Session = Depends(get_db)):
+    """Stream video clip cho trang review trên dashboard."""
+    clip = db.query(Clip).filter(Clip.id == clip_id).first()
+    if not clip or not clip.clip_path or not os.path.exists(clip.clip_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy file video clip")
+    return FileResponse(clip.clip_path, media_type="video/mp4", filename=os.path.basename(clip.clip_path))
+
+
+@router.get("/{clip_id}/audio")
+def stream_clip_audio(clip_id: str, db: Session = Depends(get_db)):
+    """Stream audio clip cho kiểm tra chất lượng âm thanh."""
+    clip = db.query(Clip).filter(Clip.id == clip_id).first()
+    audio_path = clip.audio_path if clip else None
+    if not audio_path and clip and clip.per_model_scores:
+        audio_path = (clip.per_model_scores.get("audio_features") or {}).get("audio_path")
+    if not audio_path or not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy file audio clip")
+    return FileResponse(audio_path, media_type="audio/wav", filename=os.path.basename(audio_path))
+
 
 @router.delete("/{clip_id}")
 def delete_clip(clip_id: str, db: Session = Depends(get_db)):

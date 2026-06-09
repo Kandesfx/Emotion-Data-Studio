@@ -1,27 +1,167 @@
+import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except Exception:  # pragma: no cover - fallback for environments without pydantic-settings
+    from pydantic import BaseSettings  # type: ignore
+
+    def SettingsConfigDict(**kwargs):  # type: ignore
+        return kwargs
+
+# Tự động đồng bộ PATH trên Windows
+if os.name == 'nt':
+    try:
+        import winreg
+        merged_path = os.environ.get("PATH", "")
+        
+        # Đọc User PATH từ Registry
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                user_path, _ = winreg.QueryValueEx(key, "Path")
+                merged_path += ";" + user_path
+        except Exception:
+            pass
+            
+        # Đọc System PATH từ Registry
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"System\CurrentControlSet\Control\Session Manager\Environment") as key:
+                system_path, _ = winreg.QueryValueEx(key, "Path")
+                merged_path += ";" + system_path
+        except Exception:
+            pass
+            
+        # Loại bỏ đường dẫn trùng lặp
+        resolved_paths = []
+        for p in merged_path.split(";"):
+            p_expanded = os.path.expandvars(p).strip()
+            if p_expanded and p_expanded not in resolved_paths:
+                resolved_paths.append(p_expanded)
+                
+        os.environ["PATH"] = ";".join(resolved_paths)
+    except Exception as e:
+        print(f"Lỗi đồng bộ registry PATH: {e}")
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Ưu tiên thư mục bin của ứng dụng để tìm ffmpeg/aria2c/deno trong bản build.
+try:
+    app_bin_dir = BASE_DIR / "bin"
+    if app_bin_dir.exists():
+        current_path = os.environ.get("PATH", "")
+        bin_str = str(app_bin_dir)
+        path_parts = [p for p in current_path.split(os.pathsep) if p]
+        if bin_str not in path_parts:
+            os.environ["PATH"] = bin_str + os.pathsep + current_path if current_path else bin_str
+except Exception as e:
+    print(f"Không thể ưu tiên thư mục bin của ứng dụng: {e}")
+
+def _default_user_settings_path() -> Path:
+    if getattr(sys, 'frozen', False):
+        return Path(os.environ.get("LOCALAPPDATA", ".")) / "EmotionDataStudio" / "user_settings.json"
+    return BASE_DIR / "data" / "user_settings.json"
+
+USER_SETTINGS_PATH = Path(os.getenv("EDS_USER_SETTINGS", _default_user_settings_path()))
+
+def _load_user_settings_into_env() -> None:
+    """Load user-editable desktop settings before BaseSettings is created."""
+    if not USER_SETTINGS_PATH.exists():
+        return
+    try:
+        data = json.loads(USER_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    mapping = {
+        "data_dir": "EDS_DATA_DIR",
+        "ffmpeg_path": "FFMPEG_PATH",
+        "model_cache_dir": "MODEL_CACHE_DIR",
+        "runtime_mode": "RUNTIME_MODE",
+        "scene_threshold": "SCENE_THRESHOLD",
+        "min_clip_duration": "MIN_CLIP_DURATION",
+        "max_clip_duration": "MAX_CLIP_DURATION",
+        "smart_face_scan_fps": "SMART_FACE_SCAN_FPS",
+        "smart_face_confidence": "SMART_FACE_CONFIDENCE",
+        "smart_max_missing_face_gap": "SMART_MAX_MISSING_FACE_GAP",
+        "smart_target_clip_duration": "SMART_TARGET_CLIP_DURATION",
+        "smart_silence_threshold_db": "SMART_SILENCE_THRESHOLD_DB",
+        "smart_silence_min_duration": "SMART_SILENCE_MIN_DURATION",
+        "smart_max_dialogue_extension": "SMART_MAX_DIALOGUE_EXTENSION",
+        "smart_vad_mode": "SMART_VAD_MODE",
+        "cpu_threads": "EDS_CPU_THREADS",
+        "ffmpeg_threads": "EDS_FFMPEG_THREADS",
+        "pipeline_workers": "EDS_PIPELINE_WORKERS",
+        "download_mode": "EDS_DOWNLOAD_MODE",
+        "download_max_height": "EDS_DOWNLOAD_MAX_HEIGHT",
+        "download_concurrent_fragments": "EDS_DOWNLOAD_CONCURRENT_FRAGMENTS",
+        "download_throttled_rate_kbps": "EDS_DOWNLOAD_THROTTLED_RATE_KBPS",
+        "download_use_aria2": "EDS_DOWNLOAD_USE_ARIA2",
+        "download_cookies_browser": "EDS_DOWNLOAD_COOKIES_BROWSER",
+        "download_cookie_file": "EDS_DOWNLOAD_COOKIE_FILE",
+        "gemini_api_key": "GEMINI_API_KEY",
+    }
+    for key, env_key in mapping.items():
+        value = data.get(key)
+        if value not in (None, ""):
+            os.environ.setdefault(env_key, str(value))
+
+_load_user_settings_into_env()
 
 class Settings(BaseSettings):
-    # App Information
+    """Application configuration shared by desktop UI and backend services."""
+
     APP_NAME: str = "Emotion Data Studio"
     VERSION: str = "1.0.0"
-    ENV: str = "development"  # development, production
-    
-    # Network Config
+    ENV: str = "development"
+
     HOST: str = "127.0.0.1"
     PORT: int = 8765
+
+    BASE_DIR: Path = BASE_DIR
     
-    # Path Config (Local)
-    # Nếu chạy đóng gói Electron, EDS_DATA_DIR sẽ được Electron truyền vào thông qua biến môi trường.
-    # Mặc định ở chế độ phát triển sẽ là thư mục 'data' nằm ở root của dự án.
-    BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    DATA_DIR: Path = Path(os.getenv("EDS_DATA_DIR", BASE_DIR / "data"))
-    
-    # Database config
+    @staticmethod
+    def _default_data_dir() -> Path:
+        if getattr(sys, 'frozen', False):  # PyInstaller build
+            return Path(os.environ.get("LOCALAPPDATA", ".")) / "EmotionDataStudio"
+        return Path(__file__).resolve().parent.parent / "data"
+
+    DATA_DIR: Path = Path(os.getenv("EDS_DATA_DIR", _default_data_dir()))
     DB_NAME: str = "studio.db"
-    
+
+    FFMPEG_PATH: str = os.getenv("EDS_FFMPEG_PATH", os.getenv("FFMPEG_PATH", "ffmpeg"))
+    FFPROBE_PATH: str = os.getenv("EDS_FFPROBE_PATH", os.getenv("FFPROBE_PATH", "ffprobe"))
+    MODEL_CACHE_DIR: Path = Path(os.getenv("MODEL_CACHE_DIR", str(DATA_DIR / "models_cache")))
+    RUNTIME_MODE: str = "auto"  # auto, cpu, cuda
+
+    SCENE_THRESHOLD: float = float(os.getenv("SCENE_THRESHOLD", "30.0"))
+    MIN_CLIP_DURATION: float = float(os.getenv("MIN_CLIP_DURATION", "3.0"))
+    MAX_CLIP_DURATION: float = float(os.getenv("MAX_CLIP_DURATION", "15.0"))
+
+    # Smart segmentation / dataset mining
+    SMART_FACE_SCAN_FPS: float = float(os.getenv("SMART_FACE_SCAN_FPS", "2.0"))
+    SMART_FACE_CONFIDENCE: float = float(os.getenv("SMART_FACE_CONFIDENCE", "0.55"))
+    SMART_MAX_MISSING_FACE_GAP: float = float(os.getenv("SMART_MAX_MISSING_FACE_GAP", "1.0"))
+    SMART_TARGET_CLIP_DURATION: float = float(os.getenv("SMART_TARGET_CLIP_DURATION", "6.0"))
+    SMART_SILENCE_THRESHOLD_DB: str = os.getenv("SMART_SILENCE_THRESHOLD_DB", "-35dB")
+    SMART_SILENCE_MIN_DURATION: float = float(os.getenv("SMART_SILENCE_MIN_DURATION", "0.45"))
+    SMART_MAX_DIALOGUE_EXTENSION: float = float(os.getenv("SMART_MAX_DIALOGUE_EXTENSION", "1.5"))
+    SMART_VAD_MODE: str = os.getenv("SMART_VAD_MODE", "auto")  # auto, energy, ffmpeg, disabled
+
+    # Resource utilization
+    EDS_CPU_THREADS: int = int(os.getenv("EDS_CPU_THREADS", "0") or "0")
+    EDS_FFMPEG_THREADS: int = int(os.getenv("EDS_FFMPEG_THREADS", "0") or "0")
+    EDS_PIPELINE_WORKERS: int = int(os.getenv("EDS_PIPELINE_WORKERS", "1") or "1")
+
+    # URL download tuning
+    EDS_DOWNLOAD_MODE: str = os.getenv("EDS_DOWNLOAD_MODE", os.getenv("DOWNLOAD_MODE", "balanced"))
+    EDS_DOWNLOAD_MAX_HEIGHT: int = int(os.getenv("EDS_DOWNLOAD_MAX_HEIGHT", os.getenv("DOWNLOAD_MAX_HEIGHT", "720")) or "720")
+    EDS_DOWNLOAD_CONCURRENT_FRAGMENTS: int = int(os.getenv("EDS_DOWNLOAD_CONCURRENT_FRAGMENTS", os.getenv("DOWNLOAD_CONCURRENT_FRAGMENTS", "5")) or "5")
+    EDS_DOWNLOAD_THROTTLED_RATE_KBPS: int = int(os.getenv("EDS_DOWNLOAD_THROTTLED_RATE_KBPS", os.getenv("DOWNLOAD_THROTTLED_RATE_KBPS", "100")) or "100")
+    EDS_DOWNLOAD_USE_ARIA2: bool = (os.getenv("EDS_DOWNLOAD_USE_ARIA2", os.getenv("DOWNLOAD_USE_ARIA2", "false")).strip().lower() == "true")
+    EDS_DOWNLOAD_COOKIES_BROWSER: str = os.getenv("EDS_DOWNLOAD_COOKIES_BROWSER", os.getenv("DOWNLOAD_COOKIES_BROWSER", ""))
+    EDS_DOWNLOAD_COOKIE_FILE: str = os.getenv("EDS_DOWNLOAD_COOKIE_FILE", os.getenv("DOWNLOAD_COOKIE_FILE", ""))
+
     # GCS & Google Cloud Configuration
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", None)
     GCP_PROJECT_ID: Optional[str] = os.getenv("GCP_PROJECT_ID", None)
@@ -30,57 +170,58 @@ class Settings(BaseSettings):
     CLOUD_SQL_USER: Optional[str] = os.getenv("CLOUD_SQL_USER", None)
     CLOUD_SQL_PASSWORD: Optional[str] = os.getenv("CLOUD_SQL_PASSWORD", None)
     CLOUD_SQL_DB: Optional[str] = os.getenv("CLOUD_SQL_DB", None)
-    
+
     # R2 / S3 Configuration for Releases
     R2_ENDPOINT: Optional[str] = os.getenv("R2_ENDPOINT", None)
     AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID", None)
     AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY", None)
+    EDS_UPDATE_URL: Optional[str] = os.getenv("EDS_UPDATE_URL", "https://pub-74b3008a5f904815b3951f8d440264cc.r2.dev")
 
-    # External Binaries Path
-    # Nếu chạy đóng gói, EDS_FFMPEG_PATH sẽ được Electron truyền vào.
-    # Mặc định sẽ tìm kiếm trong system PATH hoặc trong thư mục bin/
-    FFMPEG_PATH: str = os.getenv("EDS_FFMPEG_PATH", "ffmpeg")
-    FFPROBE_PATH: str = os.getenv("EDS_FFPROBE_PATH", "ffprobe")
-    
-    # AI Engine Lazy loading & hardware configuration
-    USE_GPU: bool = True
-    MODEL_CACHE_DIR: Path = DATA_DIR / "models_cache"
+    # Gemini Auto-Labeler (Vertex AI)
+    VERTEX_LOCATION: str = os.getenv("VERTEX_LOCATION", "us-central1")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_TEMPERATURE: float = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
+    GEMINI_MAX_TOKENS: int = int(os.getenv("GEMINI_MAX_TOKENS", "8192"))
+    GEMINI_INTENSITY_THRESHOLD: float = float(os.getenv("GEMINI_INTENSITY_THRESHOLD", "0.6"))
+    GEMINI_MONTHLY_BUDGET_USD: float = float(os.getenv("GEMINI_MONTHLY_BUDGET_USD", "500.0"))
+    GEMINI_COST_TRACKING_ENABLED: bool = (
+        os.getenv("GEMINI_COST_TRACKING_ENABLED", "true").strip().lower() == "true"
+    )
 
-    # Pydantic Settings Config
+    # Vertex AI Agent Studio — Cloud Run endpoint
+    # Deployed agent URL (e.g. https://genai-app-eds-xxx.us-central1.run.app)
+    AGENT_RUNTIME_URL: Optional[str] = os.getenv("AGENT_RUNTIME_URL", None)
+    # API key / secret for the deployed agent (aiplatform.googleapis.com/app-secret-key)
+    AGENT_API_KEY: Optional[str] = os.getenv("AGENT_API_KEY", None)
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
     @property
     def database_url(self) -> str:
-        """Đường dẫn kết nối SQLite cục bộ."""
-        db_path = self.DATA_DIR / self.DB_NAME
-        return f"sqlite:///{db_path.as_posix()}"
-
-    def initialize_directories(self):
-        """Khởi tạo tất cả các thư mục lưu trữ dữ liệu cục bộ nếu chưa có."""
-        subdirs = [
-            "videos",
-            "clips",
-            "frames",
-            "audio",
-            "transcripts",
-            "exports",
-            "models_cache",
-            "logs"
-        ]
-        
-        # Đảm bảo DATA_DIR tồn tại
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Khởi tạo các thư mục con
-        for folder in subdirs:
-            folder_path = self.DATA_DIR / folder
-            folder_path.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{self.DATA_DIR / self.DB_NAME}"
 
-# Khởi tạo biến settings toàn cục
+    @property
+    def user_settings_path(self) -> Path:
+        return USER_SETTINGS_PATH
+
+    def ensure_directories(self) -> None:
+        self.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        self.MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        for name in ("videos", "clips", "frames", "audio", "exports", "logs", "inbox", "features", "faces", "config"):
+            (self.DATA_DIR / name).mkdir(parents=True, exist_ok=True)
+
+    @property
+    def inbox_dir(self) -> Path:
+        return self.DATA_DIR / "inbox"
+
+    @property
+    def colab_config_path(self) -> Path:
+        return self.DATA_DIR / "config" / "pipeline_config.json"
+
 settings = Settings()
-# Tự động tạo thư mục khi load settings
-settings.initialize_directories()
+settings.ensure_directories()

@@ -1,314 +1,315 @@
 """
-Emotion Data Studio — Export & Sync Page
-=========================================
-Export dataset and manage cloud synchronization:
-  - Export format selection (Full / Compact / Labels Only)
-  - Filter options (approved only, train/val/test split)
-  - Export progress
-  - Cloud sync status (Google Cloud)
+Emotion Data Studio - Export & Sync Manager
+
+Local dataset export UI with quality gate preview, progress, cancel support,
+and post-export actions.
 """
 
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from collections import Counter
+from pathlib import Path
+
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QRadioButton, QCheckBox, QGroupBox, QScrollArea,
-    QProgressBar, QComboBox, QFileDialog, QMessageBox,
-    QSizePolicy, QButtonGroup
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QRadioButton,
+    QCheckBox,
+    QScrollArea,
+    QProgressBar,
+    QFileDialog,
+    QMessageBox,
+    QButtonGroup,
+    QPlainTextEdit,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QTimer
 
 from ui.styles.theme import Colors
 
 
 class ExportPage(QWidget):
-    """Export & Cloud Sync Manager page"""
+    """Export & Cloud Sync Manager page."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._export_worker = None
+        self._last_output_path: str | None = None
+        self._active_video_id: str | None = None
+        self._quality_stats: dict = {}
         self._setup_ui()
+        self.refresh_data()
 
     def _setup_ui(self):
+        page_layout = QVBoxLayout(self)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-
-        scroll_content = QWidget()
-        self.main_layout = QVBoxLayout(scroll_content)
-        self.main_layout.setContentsMargins(32, 24, 32, 24)
-        self.main_layout.setSpacing(24)
-
-        page_layout = QVBoxLayout(self)
-        page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.addWidget(scroll)
-        scroll.setWidget(scroll_content)
 
-        # --- Header ---
-        header = QVBoxLayout()
-        header.setSpacing(4)
+        content = QWidget()
+        scroll.setWidget(content)
+        self.main_layout = QVBoxLayout(content)
+        self.main_layout.setContentsMargins(32, 24, 32, 24)
+        self.main_layout.setSpacing(20)
 
-        title = QLabel("📦 Export & Sync Manager")
+        title = QLabel("Xuất & Đồng Bộ")
         title.setObjectName("pageTitle")
-        header.addWidget(title)
-
-        subtitle = QLabel("Xuất dataset và đồng bộ lên Google Cloud")
+        self.main_layout.addWidget(title)
+        subtitle = QLabel("Xuất bộ dữ liệu cảm xúc sạch với kiểm tra chất lượng và metadata có thể tái tạo.")
         subtitle.setObjectName("pageSubtitle")
-        header.addWidget(subtitle)
+        self.main_layout.addWidget(subtitle)
 
-        self.main_layout.addLayout(header)
-
-        # --- Export Local Section ---
+        self._build_quality_gate_section()
         self._build_export_section()
-
-        # --- Export Stats ---
-        self._build_stats_section()
-
-        # --- Cloud Sync Section ---
+        self._build_output_section()
         self._build_cloud_section()
-
         self.main_layout.addStretch()
 
+    def _build_quality_gate_section(self):
+        card = QFrame()
+        card.setObjectName("cardElevated")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
+
+        row = QHBoxLayout()
+        title = QLabel("Kiểm Tra Chất Lượng")
+        title.setObjectName("sectionTitle")
+        row.addWidget(title)
+        row.addStretch()
+        self.refresh_stats_btn = QPushButton("Làm mới thống kê")
+        self.refresh_stats_btn.clicked.connect(self.refresh_data)
+        row.addWidget(self.refresh_stats_btn)
+        layout.addLayout(row)
+
+        stats_row = QHBoxLayout()
+        self.total_count_label    = self._stat_box(stats_row, "0", "Tổng clip",    Colors.TEXT_PRIMARY)
+        self.ready_count_label    = self._stat_box(stats_row, "0", "Xuất được",    Colors.SUCCESS)
+        self.rejected_count_label = self._stat_box(stats_row, "0", "Bị loại",     Colors.ERROR)
+        self.balance_label        = self._stat_box(stats_row, "0", "Cảm xúc",     Colors.ACCENT_LIGHT)
+        self.est_size_label       = self._stat_box(stats_row, "0 MB", "Kích thước ước tính", Colors.INFO)
+        stats_row.addStretch()
+        layout.addLayout(stats_row)
+
+        self.quality_report = QPlainTextEdit()
+        self.quality_report.setObjectName("logViewer")
+        self.quality_report.setReadOnly(True)
+        self.quality_report.setMaximumHeight(160)
+        layout.addWidget(self.quality_report)
+        self.main_layout.addWidget(card)
+
+    def _stat_box(self, parent_layout, value: str, label: str, color: str) -> QLabel:
+        col = QVBoxLayout()
+        value_label = QLabel(value)
+        value_label.setObjectName("statValue")
+        value_label.setStyleSheet(f"color: {color};")
+        col.addWidget(value_label)
+        desc = QLabel(label)
+        desc.setObjectName("statLabel")
+        col.addWidget(desc)
+        parent_layout.addLayout(col)
+        return value_label
+
     def _build_export_section(self):
-        """Local export configuration"""
-        export_card = QFrame()
-        export_card.setObjectName("card")
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
 
-        card_layout = QVBoxLayout(export_card)
-        card_layout.setSpacing(12)
-
-        section_title = QLabel("📁 Export Local")
-        section_title.setObjectName("sectionTitle")
-        card_layout.addWidget(section_title)
-
-        # Format selection
-        format_label = QLabel("Export Format:")
-        format_label.setObjectName("statLabel")
-        card_layout.addWidget(format_label)
+        title = QLabel("Xuất Cục Bộ")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+        format_hint = QLabel("Chọn kiểu xuất dataset. Xuất đầy đủ sẽ sao chép clip, audio và annotation khuôn mặt; metadata gọn phù hợp để kiểm tra nhanh; chỉ nhãn dùng cho phân tích nhẹ.")
+        format_hint.setObjectName("mutedText")
+        format_hint.setWordWrap(True)
+        layout.addWidget(format_hint)
 
         self.format_group = QButtonGroup(self)
-
         format_row = QHBoxLayout()
-        format_row.setSpacing(16)
-
-        self.radio_full = QRadioButton("Full (video + audio + text + labels)")
-        self.format_group.addButton(self.radio_full)
-        format_row.addWidget(self.radio_full)
-
-        self.radio_compact = QRadioButton("Compact (frames + MFCC + tokens + labels)")
+        self.radio_full    = QRadioButton("Đầy đủ: clip + audio + annotation + metadata")
+        self.radio_compact = QRadioButton("Metadata gọn: nhãn, split, quality report")
+        self.radio_labels  = QRadioButton("Chỉ nhãn: labels.csv / labels.jsonl")
         self.radio_compact.setChecked(True)
-        self.format_group.addButton(self.radio_compact)
-        format_row.addWidget(self.radio_compact)
+        for radio in (self.radio_full, self.radio_compact, self.radio_labels):
+            self.format_group.addButton(radio)
+            format_row.addWidget(radio)
+        format_row.addStretch()
+        layout.addLayout(format_row)
 
-        self.radio_labels = QRadioButton("Labels Only (CSV)")
-        self.format_group.addButton(self.radio_labels)
-        format_row.addWidget(self.radio_labels)
-
-        card_layout.addLayout(format_row)
-
-        # Filter options
-        filter_label = QLabel("Filter Options:")
-        filter_label.setObjectName("statLabel")
-        card_layout.addWidget(filter_label)
-
-        filter_row = QVBoxLayout()
-        filter_row.setSpacing(6)
-
-        self.check_approved_only = QCheckBox("Only approved clips")
+        options = QVBoxLayout()
+        self.check_approved_only = QCheckBox("Chỉ clip đã duyệt / tự động duyệt")
         self.check_approved_only.setChecked(True)
-        filter_row.addWidget(self.check_approved_only)
-
-        self.check_auto_split = QCheckBox("Auto-split train/val/test (70/15/15)")
+        self.check_auto_split    = QCheckBox("Tự động chia train/val/test (70/15/15)")
         self.check_auto_split.setChecked(True)
-        filter_row.addWidget(self.check_auto_split)
-
-        self.check_stratified = QCheckBox("Stratified (balance emotions)")
+        self.check_stratified    = QCheckBox("Chia phân tầng theo cảm xúc")
         self.check_stratified.setChecked(True)
-        filter_row.addWidget(self.check_stratified)
+        for checkbox in (self.check_approved_only, self.check_auto_split, self.check_stratified):
+            checkbox.stateChanged.connect(self.refresh_data)
+            options.addWidget(checkbox)
+        layout.addLayout(options)
 
-        card_layout.addLayout(filter_row)
-
-        # Export progress
         self.export_progress = QProgressBar()
         self.export_progress.setObjectName("progressLarge")
         self.export_progress.setValue(0)
         self.export_progress.setVisible(False)
-        card_layout.addWidget(self.export_progress)
+        layout.addWidget(self.export_progress)
 
         self.export_status_label = QLabel("")
         self.export_status_label.setObjectName("mutedText")
         self.export_status_label.setVisible(False)
-        card_layout.addWidget(self.export_status_label)
+        layout.addWidget(self.export_status_label)
 
-        # Export button
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        self.export_btn = QPushButton("📁 Export to Local Folder")
+        buttons = QHBoxLayout()
+        self.export_btn = QPushButton("Xuất ra Thư Mục")
         self.export_btn.setObjectName("primaryBtn")
-        self.export_btn.setMinimumWidth(200)
-        self.export_btn.setMinimumHeight(40)
-        self.export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_btn.setMinimumWidth(190)
         self.export_btn.clicked.connect(self._on_export)
-        btn_row.addWidget(self.export_btn)
+        buttons.addWidget(self.export_btn)
+        self.cancel_btn = QPushButton("Hủy Xuất")
+        self.cancel_btn.setObjectName("dangerBtn")
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.clicked.connect(self._on_cancel_export)
+        buttons.addWidget(self.cancel_btn)
+        buttons.addStretch()
+        self.mmsa_export_btn = QPushButton("Xuất MMSA (.pkl) cho MulT")
+        self.mmsa_export_btn.clicked.connect(self._on_mmsa_export)
+        buttons.addWidget(self.mmsa_export_btn)
+        layout.addLayout(buttons)
+        self.main_layout.addWidget(card)
 
-        card_layout.addLayout(btn_row)
-
-        self.main_layout.addWidget(export_card)
-
-    def _build_stats_section(self):
-        """Export statistics"""
-        stats_card = QFrame()
-        stats_card.setObjectName("card")
-
-        card_layout = QHBoxLayout(stats_card)
-        card_layout.setSpacing(24)
-
-        # Ready clips
-        ready_col = QVBoxLayout()
-        self.ready_count_label = QLabel("0")
-        self.ready_count_label.setObjectName("statValue")
-        self.ready_count_label.setStyleSheet(f"color: {Colors.SUCCESS};")
-        ready_col.addWidget(self.ready_count_label)
-        ready_desc = QLabel("Clips Ready")
-        ready_desc.setObjectName("statLabel")
-        ready_col.addWidget(ready_desc)
-        card_layout.addLayout(ready_col)
-
-        # Estimated size
-        size_col = QVBoxLayout()
-        self.est_size_label = QLabel("0 MB")
-        self.est_size_label.setObjectName("statValue")
-        size_col.addWidget(self.est_size_label)
-        size_desc = QLabel("Est. Size")
-        size_desc.setObjectName("statLabel")
-        size_col.addWidget(size_desc)
-        card_layout.addLayout(size_col)
-
-        # Emotion balance
-        balance_col = QVBoxLayout()
-        self.balance_label = QLabel("N/A")
-        self.balance_label.setObjectName("statValue")
-        self.balance_label.setStyleSheet(f"color: {Colors.ACCENT_LIGHT};")
-        balance_col.addWidget(self.balance_label)
-        balance_desc = QLabel("Emotions")
-        balance_desc.setObjectName("statLabel")
-        balance_col.addWidget(balance_desc)
-        card_layout.addLayout(balance_col)
-
-        card_layout.addStretch()
-
-        self.main_layout.addWidget(stats_card)
+    def _build_output_section(self):
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(10)
+        title = QLabel("Lần Xuất Cuối")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+        self.output_path_label = QLabel("Chưa xuất lần nào")
+        self.output_path_label.setObjectName("mutedText")
+        self.output_path_label.setWordWrap(True)
+        layout.addWidget(self.output_path_label)
+        actions = QHBoxLayout()
+        self.open_folder_btn = QPushButton("Mở thư mục")
+        self.open_folder_btn.setEnabled(False)
+        self.open_folder_btn.clicked.connect(self._open_last_output)
+        actions.addWidget(self.open_folder_btn)
+        self.copy_summary_btn = QPushButton("Sao chép tóm tắt")
+        self.copy_summary_btn.setEnabled(False)
+        self.copy_summary_btn.clicked.connect(self._copy_summary)
+        actions.addWidget(self.copy_summary_btn)
+        actions.addStretch()
+        layout.addLayout(actions)
+        self.main_layout.addWidget(card)
 
     def _build_cloud_section(self):
-        """Cloud sync section"""
-        cloud_card = QFrame()
-        cloud_card.setObjectName("card")
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
 
-        card_layout = QVBoxLayout(cloud_card)
-        card_layout.setSpacing(12)
+        title = QLabel("Đồng Bộ Đám Mây")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
 
-        section_title = QLabel("☁️ Sync to Cloud")
-        section_title.setObjectName("sectionTitle")
-        card_layout.addWidget(section_title)
+        status_note = QLabel(
+            "Đồng bộ clips, audio và metadata lên Google Cloud Storage. "
+            "Cấu hình credentials trong trang Cài Đặt."
+        )
+        status_note.setObjectName("mutedText")
+        status_note.setWordWrap(True)
+        layout.addWidget(status_note)
 
-        # Cloud status
-        status_row = QHBoxLayout()
+        self.cloud_status_label = QLabel("Kiểm tra trạng thái...")
+        self.cloud_status_label.setObjectName("mutedText")
+        layout.addWidget(self.cloud_status_label)
 
-        self.cloud_status_label = QLabel("⚠️ Not Connected")
-        self.cloud_status_label.setObjectName("warningText")
-        status_row.addWidget(self.cloud_status_label)
+        buttons = QHBoxLayout()
+        self.sync_full_btn = QPushButton("Sync Đầy Đủ")
+        self.sync_full_btn.setObjectName("primaryBtn")
+        self.sync_full_btn.clicked.connect(self._on_sync_full)
+        buttons.addWidget(self.sync_full_btn)
+        self.sync_files_btn = QPushButton("Sync Files")
+        self.sync_files_btn.clicked.connect(self._on_sync_files)
+        buttons.addWidget(self.sync_files_btn)
+        self.sync_status_btn = QPushButton("Kiểm Tra")
+        self.sync_status_btn.clicked.connect(self._on_check_sync_status)
+        buttons.addWidget(self.sync_status_btn)
+        buttons.addStretch()
+        layout.addLayout(buttons)
 
-        status_row.addStretch()
+        self.sync_progress = QProgressBar()
+        self.sync_progress.setVisible(False)
+        layout.addWidget(self.sync_progress)
 
-        self.cloud_settings_btn = QPushButton("⚙️ Cloud Settings")
-        self.cloud_settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        status_row.addWidget(self.cloud_settings_btn)
+        self.sync_log = QPlainTextEdit()
+        self.sync_log.setObjectName("logViewer")
+        self.sync_log.setReadOnly(True)
+        self.sync_log.setMaximumHeight(120)
+        layout.addWidget(self.sync_log)
 
-        card_layout.addLayout(status_row)
+        self.main_layout.addWidget(card)
 
-        # Sync info
-        info_row = QHBoxLayout()
-        info_row.setSpacing(24)
-
-        self.last_sync_label = QLabel("Last sync: Never")
-        self.last_sync_label.setObjectName("mutedText")
-        info_row.addWidget(self.last_sync_label)
-
-        self.pending_changes_label = QLabel("Pending changes: 0")
-        self.pending_changes_label.setObjectName("mutedText")
-        info_row.addWidget(self.pending_changes_label)
-
-        info_row.addStretch()
-        card_layout.addLayout(info_row)
-
-        # Sync options
-        self.check_sync_metadata = QCheckBox("Metadata → Cloud SQL PostgreSQL")
-        self.check_sync_metadata.setChecked(True)
-        card_layout.addWidget(self.check_sync_metadata)
-
-        self.check_sync_files = QCheckBox("Processed files → Cloud Storage")
-        self.check_sync_files.setChecked(True)
-        card_layout.addWidget(self.check_sync_files)
-
-        self.check_sync_raw = QCheckBox("Raw videos → Cloud Storage (⚠️ large files)")
-        card_layout.addWidget(self.check_sync_raw)
-
-        # Sync button
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        self.sync_btn = QPushButton("🔄 Sync Now")
-        self.sync_btn.setObjectName("primaryBtn")
-        self.sync_btn.setMinimumWidth(150)
-        self.sync_btn.setEnabled(False)  # Disabled until cloud connected
-        self.sync_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_row.addWidget(self.sync_btn)
-
-        card_layout.addLayout(btn_row)
-
-        self.main_layout.addWidget(cloud_card)
-
-    # ================================================================
-    # ACTIONS
-    # ================================================================
+    # Actions --------------------------------------------------------
 
     @Slot()
     def _on_export(self):
-        """Handle export button click"""
-        # Choose export directory
-        export_dir = QFileDialog.getExistingDirectory(
-            self, "Chọn thư mục xuất dataset"
-        )
+        self.refresh_data()
+        if self._quality_stats.get("exportable", 0) <= 0:
+            QMessageBox.warning(
+                self,
+                "Không có clip xuất được",
+                "Không có clip nào qua kiểm tra chất lượng. Hãy duyệt clip và đảm bảo file tồn tại.",
+            )
+            return
+
+        export_dir = QFileDialog.getExistingDirectory(self, "Chọn thư mục xuất dataset")
         if not export_dir:
             return
 
-        # Determine format
         if self.radio_full.isChecked():
             export_format = "full"
-        elif self.radio_compact.isChecked():
-            export_format = "compact"
-        else:
+        elif self.radio_labels.isChecked():
             export_format = "labels_only"
+        else:
+            export_format = "compact"
 
-        # Start export
-        self.export_btn.setEnabled(False)
-        self.export_btn.setText("⏳ Đang xuất...")
-        self.export_progress.setVisible(True)
-        self.export_status_label.setVisible(True)
-        self.export_progress.setValue(0)
-        self.export_status_label.setText("Preparing export...")
-
-        # Run export in background thread
         from ui.workers.export_worker import ExportWorker
+
         self._export_worker = ExportWorker(
             export_dir=export_dir,
             export_format=export_format,
             approved_only=self.check_approved_only.isChecked(),
             auto_split=self.check_auto_split.isChecked(),
             stratified=self.check_stratified.isChecked(),
+            video_id=self._active_video_id,
         )
         self._export_worker.progress_updated.connect(self._on_export_progress)
         self._export_worker.export_finished.connect(self._on_export_finished)
         self._export_worker.error_occurred.connect(self._on_export_error)
+
+        self.export_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+        self.export_progress.setVisible(True)
+        self.export_status_label.setVisible(True)
+        self.export_progress.setValue(0)
+        self.export_status_label.setText("Đang chuẩn bị export...")
         self._export_worker.start()
+
+    @Slot()
+    def _on_cancel_export(self):
+        if self._export_worker is not None and hasattr(self._export_worker, "cancel"):
+            self._export_worker.cancel()
+        self.cancel_btn.setEnabled(False)
+        self.export_status_label.setText("Đã yêu cầu hủy export...")
 
     @Slot(int, str)
     def _on_export_progress(self, pct: int, msg: str):
@@ -317,59 +318,289 @@ class ExportPage(QWidget):
 
     @Slot(str)
     def _on_export_finished(self, output_path: str):
+        self._last_output_path = output_path
         self.export_btn.setEnabled(True)
-        self.export_btn.setText("📁 Export to Local Folder")
+        self.cancel_btn.setEnabled(False)
         self.export_progress.setValue(100)
-        self.export_status_label.setText(f"✅ Exported to: {output_path}")
-
-        QMessageBox.information(
-            self, "Export Complete",
-            f"Dataset đã được xuất thành công!\n\nĐường dẫn: {output_path}"
-        )
+        self.export_status_label.setText(f"Đã xuất tới: {output_path}")
+        self.output_path_label.setText(output_path)
+        self.open_folder_btn.setEnabled(True)
+        self.copy_summary_btn.setEnabled(True)
+        QMessageBox.information(self, "Xuất Thành Công", f"Bộ dữ liệu đã xuất thành công:\n\n{output_path}")
 
     @Slot(str)
     def _on_export_error(self, error_msg: str):
         self.export_btn.setEnabled(True)
-        self.export_btn.setText("📁 Export to Local Folder")
-        self.export_progress.setVisible(False)
-        self.export_status_label.setText(f"❌ Error: {error_msg}")
+        self.cancel_btn.setEnabled(False)
+        self.export_status_label.setVisible(True)
+        self.export_status_label.setText(f"Lỗi: {error_msg}")
+        QMessageBox.critical(self, "Lỗi Xuất", error_msg)
 
-        QMessageBox.critical(self, "Export Error", f"Lỗi khi xuất:\n{error_msg}")
+    @Slot()
+    def _on_mmsa_export(self):
+        from PySide6.QtWidgets import QFileDialog
+        output_path, _ = QFileDialog.getSaveFileName(
+            self, "Xuất MMSA .pkl", "emotions_dataset.pkl", "Pickle files (*.pkl)"
+        )
+        if not output_path:
+            return
 
-    # ================================================================
-    # DATA
-    # ================================================================
+        self.mmsa_export_btn.setEnabled(False)
+        self.export_progress.setVisible(True)
+        self.export_status_label.setVisible(True)
+        self.export_status_label.setText("Đang export MMSA .pkl cho MulT...")
+
+        try:
+            from backend.database.local_db import get_session
+            from backend.services.exporters.mmsa_exporter import MMSAExporter
+            from backend.config import settings
+
+            session = get_session()
+            try:
+                feature_dir = str(settings.DATA_DIR / "features")
+                exporter = MMSAExporter(session)
+                result = exporter.export(
+                    output_path=output_path,
+                    feature_dir=feature_dir,
+                    require_aligned=True,
+                )
+            finally:
+                session.close()
+
+            if "error" in result:
+                QMessageBox.warning(self, "Export thất bại", result["error"])
+                self.export_status_label.setText(f"Lỗi: {result['error']}")
+            else:
+                summary = (
+                    f"✅ Export thành công!\n\n"
+                    f"File: {output_path}\n"
+                    f"Tổng clip: {result['total_clips']}\n"
+                    f"Train: {result['train_clips']} | Val: {result['valid_clips']} | Test: {result['test_clips']}\n"
+                    f"Videos: {result['train_videos'] + result['valid_videos'] + result['test_videos']}"
+                )
+                self.export_status_label.setText(f"✅ Đã export: {result['total_clips']} clips")
+                self._last_output_path = str(Path(output_path).parent)
+                self.output_path_label.setText(output_path)
+                self.open_folder_btn.setEnabled(True)
+                QMessageBox.information(self, "Export MMSA Thành Công", summary)
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi", f"Không export được:\n{exc}")
+            self.export_status_label.setText(f"Lỗi: {exc}")
+        finally:
+            self.mmsa_export_btn.setEnabled(True)
+            self.export_progress.setValue(0)
+            self.export_progress.setVisible(False)
+            self.export_status_label.setVisible(False)
+
+    def _open_last_output(self):
+        if not self._last_output_path:
+            return
+        path = Path(self._last_output_path)
+        try:
+            if os.name == "nt":
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif os.name == "posix":
+                subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)])
+        except Exception as exc:
+            QMessageBox.warning(self, "Không thể mở thư mục", str(exc))
+
+    def _copy_summary(self):
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self._build_summary_text())
+        self.output_path_label.setText("Đã sao chép tóm tắt vào clipboard")
+
+    # Cloud sync handlers -----------------------------------------------
+
+    def _run_sync_worker(self, sync_type: str, **kwargs):
+        from ui.workers.sync_worker import SyncWorker
+        if self._export_worker is not None and self._export_worker.isRunning():
+            QMessageBox.warning(self, "Đang bận", "Có tiến trình export/sync đang chạy.")
+            return
+        self._export_worker = SyncWorker(sync_type=sync_type, **kwargs)
+        self._export_worker.log_message.connect(self._on_sync_log)
+        self._export_worker.progress_updated.connect(self._on_sync_progress)
+        self._export_worker.sync_finished.connect(self._on_sync_finished)
+        self._export_worker.error_occurred.connect(self._on_export_error)
+        self.sync_full_btn.setEnabled(False)
+        self.sync_files_btn.setEnabled(False)
+        self.sync_progress.setVisible(True)
+        self._export_worker.start()
+
+    @Slot()
+    def _on_sync_full(self):
+        self._run_sync_worker("full", sync_videos=False)
+
+    @Slot()
+    def _on_sync_files(self):
+        self._run_sync_worker("files", sync_videos=False)
+
+    @Slot(str)
+    def _on_sync_log(self, msg: str):
+        self.sync_log.appendPlainText(msg)
+
+    @Slot(str, int, int)
+    def _on_sync_progress(self, stage: str, current: int, total: int):
+        if total > 0:
+            self.sync_progress.setValue(int(current / total * 100))
+
+    @Slot(dict)
+    def _on_sync_finished(self, report: dict):
+        self.sync_full_btn.setEnabled(True)
+        self.sync_files_btn.setEnabled(True)
+        self.sync_progress.setVisible(False)
+        status = report.get("status", "unknown")
+        if status == "error":
+            self.cloud_status_label.setText(f"❌ Lỗi: {report.get('error', 'unknown')}")
+        else:
+            meta = report.get("metadata", {})
+            files = report.get("files", {})
+            meta_errors = meta.get("errors", [])
+            file_errors = files.get("errors", [])
+            total_errors = len(meta_errors) + len(file_errors)
+            if total_errors > 0:
+                self.cloud_status_label.setText(
+                    f"⚠️ Hoàn tất với {total_errors} lỗi"
+                )
+            else:
+                self.cloud_status_label.setText(
+                    f"✅ Hoàn tất. "
+                    f"Up: {meta.get('uploaded_videos', 0)} video, "
+                    f"{meta.get('uploaded_clips', 0)} clip | "
+                    f"Files: {files.get('uploaded_files', 0)}"
+                )
+        QMessageBox.information(self, "Sync Hoàn Tất", "Cloud sync đã chạy xong.\n\nXem log để biết chi tiết.")
+
+    @Slot()
+    def _on_check_sync_status(self):
+        try:
+            from backend.cloud.sync_manager import SyncManager
+            manager = SyncManager()
+            avail = manager.is_available
+            last = manager.get_sync_status()
+            if not avail:
+                self.cloud_status_label.setText(
+                    "⚠️ Cloud sync chưa cấu hình. "
+                    "Đặt GOOGLE_APPLICATION_CREDENTIALS và GCS_BUCKET_NAME trong Settings."
+                )
+            else:
+                last_time = last.get("last_sync") or "chưa bao giờ"
+                last_status = last.get("status", "unknown")
+                self.cloud_status_label.setText(
+                    f"✅ Cloud sync sẵn sàng. Last sync: {last_time} ({last_status})"
+                )
+        except Exception as exc:
+            self.cloud_status_label.setText(f"❌ Lỗi kiểm tra: {exc}")
+
+    # Data -----------------------------------------------------------
+
+    def set_active_video(self, video_id: str | None):
+        self._active_video_id = video_id
+        self.refresh_data()
 
     def refresh_data(self):
-        """Refresh export statistics"""
         try:
             from backend.database.local_db import get_session
             from backend.database.models import Clip
 
             session = get_session()
             try:
-                ready = session.query(Clip).filter(
-                    Clip.status.in_(['approved', 'auto_approved'])
-                ).count()
-                self.ready_count_label.setText(f"{ready:,}")
-
-                # Estimate size (rough: ~2MB per clip for compact)
-                est_mb = ready * 2
-                if est_mb > 1024:
-                    self.est_size_label.setText(f"{est_mb/1024:.1f} GB")
-                else:
-                    self.est_size_label.setText(f"{est_mb} MB")
-
-                # Count distinct emotions
-                from sqlalchemy import func
-                emotions = session.query(
-                    func.count(func.distinct(Clip.ai_emotion))
-                ).filter(
-                    Clip.status.in_(['approved', 'auto_approved'])
-                ).scalar()
-                self.balance_label.setText(f"{emotions or 0}")
-
+                query = session.query(Clip)
+                if self._active_video_id:
+                    query = query.filter(Clip.video_id == self._active_video_id)
+                clips = query.all()
             finally:
                 session.close()
-        except Exception:
-            pass
+
+            stats = self._calculate_quality_stats(clips)
+            self._quality_stats = stats
+            self.total_count_label.setText(f"{stats['total']:,}")
+            self.ready_count_label.setText(f"{stats['exportable']:,}")
+            self.rejected_count_label.setText(f"{stats['rejected']:,}")
+            self.balance_label.setText(str(stats["emotion_count"]))
+            self.est_size_label.setText(self._format_size(stats["estimated_full_bytes"]))
+            self.quality_report.setPlainText(self._build_quality_report(stats))
+        except Exception as exc:
+            if hasattr(self, "quality_report"):
+                self.quality_report.setPlainText(f"Không thể tải thống kê export: {exc}")
+
+    def _calculate_quality_stats(self, clips) -> dict:
+        reasons = Counter()
+        emotions = Counter()
+        exportable = 0
+        estimated_size = 0
+        
+        approved_only = self.check_approved_only.isChecked() if hasattr(self, "check_approved_only") else True
+        
+        for clip in clips:
+            clip_reasons = []
+            
+            # Check if approved if approved_only filter is active
+            if approved_only and clip.status not in ("approved", "auto_approved"):
+                clip_reasons.append("Chưa duyệt thủ công")
+                
+            label = clip.user_emotion or clip.ai_emotion
+            if not label:
+                clip_reasons.append("Thiếu nhãn cảm xúc")
+                
+            if not clip.clip_path or not Path(clip.clip_path).exists():
+                clip_reasons.append("Thiếu file video (clip)")
+                
+            if not clip.duration or clip.duration <= 0:
+                clip_reasons.append("Thời lượng không hợp lệ")
+                
+            if clip_reasons:
+                for r in clip_reasons:
+                    reasons[r] += 1
+            else:
+                exportable += 1
+                emotions[label] += 1
+                try:
+                    estimated_size += Path(clip.clip_path).stat().st_size
+                except Exception:
+                    estimated_size += 2 * 1024 * 1024
+                    
+        return {
+            "total": len(clips),
+            "exportable": exportable,
+            "rejected": len(clips) - exportable,
+            "reasons": reasons,
+            "emotions": emotions,
+            "emotion_count": len(emotions),
+            "estimated_full_bytes": estimated_size,
+        }
+
+    def _build_quality_report(self, stats: dict) -> str:
+        lines = [
+            f"Tổng số phân đoạn xem xét: {stats['total']}",
+            f"Số phân đoạn đủ điều kiện xuất: {stats['exportable']}",
+            f"Số phân đoạn bị loại / chưa sẵn sàng: {stats['rejected']}",
+            "",
+            "Lý do chi tiết:",
+        ]
+        if stats["reasons"]:
+            for reason, count in stats["reasons"].most_common():
+                lines.append(f"- {reason}: {count} clip")
+        else:
+            lines.append("- Không có")
+        lines.extend(["", "Cân bằng nhãn cảm xúc xuất được:"])
+        if stats["emotions"]:
+            for emotion, count in sorted(stats["emotions"].items()):
+                lines.append(f"- {emotion}: {count} clip")
+        else:
+            lines.append("- Không có clip nào có nhãn đủ điều kiện xuất")
+        return "\n".join(lines)
+
+    def _build_summary_text(self) -> str:
+        return "\n".join([
+            "Tóm tắt export Emotion Data Studio",
+            f"Output: {self._last_output_path or 'N/A'}",
+            self.quality_report.toPlainText(),
+        ])
+
+    @staticmethod
+    def _format_size(num_bytes: int) -> str:
+        if num_bytes >= 1024 ** 3:
+            return f"{num_bytes / (1024 ** 3):.1f} GB"
+        if num_bytes >= 1024 ** 2:
+            return f"{num_bytes / (1024 ** 2):.1f} MB"
+        return f"{num_bytes / 1024:.1f} KB"
