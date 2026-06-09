@@ -1,0 +1,530 @@
+[
+  {
+    "timestamp": 0.0,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          1044,
+          241,
+          1295,
+          566
+        ],
+        "confidence": 0.999984860420227,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_000_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 0.501,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          998,
+          216,
+          1242,
+          546
+        ],
+        "confidence": 0.9999613761901855,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_001_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 1.001,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          935,
+          186,
+          1194,
+          539
+        ],
+        "confidence": 0.9999986886978149,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_002_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 1.502,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          947,
+          196,
+          1179,
+          534
+        ],
+        "confidence": 0.9999970197677612,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_003_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 2.002,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          929,
+          194,
+          1177,
+          531
+        ],
+        "confidence": 0.9999992847442627,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_004_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 2.502,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          911,
+          184,
+          1186,
+          549
+        ],
+        "confidence": 0.9999967813491821,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_005_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 3.003,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          178,
+          1170,
+          548
+        ],
+        "confidence": 0.9999957084655762,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_006_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 3.504,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          890,
+          179,
+          1171,
+          553
+        ],
+        "confidence": 0.9999905824661255,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_007_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 4.004,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          877,
+          177,
+          1162,
+          545
+        ],
+        "confidence": 0.9999977350234985,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_008_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 4.505,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          878,
+          175,
+          1147,
+          543
+        ],
+        "confidence": 0.9999934434890747,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_009_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 5.005,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          867,
+          191,
+          1118,
+          538
+        ],
+        "confidence": 0.9999982118606567,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_010_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 5.506,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          862,
+          173,
+          1119,
+          543
+        ],
+        "confidence": 0.9999940395355225,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_011_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 6.006,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          846,
+          177,
+          1114,
+          536
+        ],
+        "confidence": 0.9999927282333374,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_012_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 6.506,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          843,
+          175,
+          1119,
+          549
+        ],
+        "confidence": 0.9999738931655884,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_013_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 7.007,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          839,
+          182,
+          1114,
+          545
+        ],
+        "confidence": 0.9999985694885254,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_014_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 7.508,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          829,
+          176,
+          1101,
+          541
+        ],
+        "confidence": 0.9999951124191284,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_015_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 8.008,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          820,
+          163,
+          1103,
+          541
+        ],
+        "confidence": 0.9999896287918091,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_016_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 8.508,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          826,
+          155,
+          1111,
+          539
+        ],
+        "confidence": 0.9999903440475464,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_017_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 9.009,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          823,
+          151,
+          1109,
+          537
+        ],
+        "confidence": 0.9999920129776001,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_018_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 9.51,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          831,
+          155,
+          1103,
+          527
+        ],
+        "confidence": 0.9999881982803345,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_019_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 10.01,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          855,
+          145,
+          1129,
+          525
+        ],
+        "confidence": 0.9999923706054688,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_020_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 10.511,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          870,
+          148,
+          1139,
+          528
+        ],
+        "confidence": 0.9999890327453613,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_021_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 11.011,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          881,
+          143,
+          1156,
+          533
+        ],
+        "confidence": 0.9999926090240479,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_022_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 11.511,
+    "frame_size": [
+      1920,
+      1080
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          886,
+          142,
+          1172,
+          540
+        ],
+        "confidence": 0.9999966621398926,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\163c8130-65b9-41a2-991e-bca41af85c68_clip_73\\face_023_0.jpg",
+        "detector": "mtcnn",
+        "track_id": 0
+      }
+    ]
+  }
+]

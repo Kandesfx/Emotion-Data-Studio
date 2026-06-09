@@ -1,0 +1,208 @@
+[
+  {
+    "timestamp": 0.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          269,
+          94,
+          568,
+          393
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_10\\face_000_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      }
+    ]
+  },
+  {
+    "timestamp": 0.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 0.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 1.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 1.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 1.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 2.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 2.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 2.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 3.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 3.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 3.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 4.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 4.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 4.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 5.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 5.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 5.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 6.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 6.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 6.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 7.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 7.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  },
+  {
+    "timestamp": 7.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": []
+  }
+]

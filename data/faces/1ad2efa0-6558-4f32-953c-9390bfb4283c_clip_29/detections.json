@@ -1,0 +1,1609 @@
+[
+  {
+    "timestamp": 0.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_000_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_000_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          888,
+          273,
+          965,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_000_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          638,
+          268,
+          831,
+          461
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_000_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          932,
+          238,
+          1195,
+          501
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_000_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 4
+      }
+    ]
+  },
+  {
+    "timestamp": 0.167,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_001_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_001_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          888,
+          273,
+          965,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_001_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          639,
+          271,
+          828,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_001_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 0.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          964,
+          305
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_002_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          92,
+          377,
+          175,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_002_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 5
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_002_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          886,
+          272,
+          966,
+          352
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_002_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          638,
+          272,
+          825,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_002_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 0.5,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_003_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_003_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          886,
+          272,
+          966,
+          352
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_003_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          638,
+          272,
+          825,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_003_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 0.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_004_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_004_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          888,
+          272,
+          967,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_004_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          638,
+          272,
+          825,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_004_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 0.833,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_005_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          93,
+          380,
+          164,
+          451
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_005_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 5
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_005_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          888,
+          274,
+          966,
+          352
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_005_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          638,
+          268,
+          831,
+          461
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_005_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_006_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_006_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          890,
+          275,
+          965,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_006_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          638,
+          272,
+          825,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_006_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.167,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_007_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          272,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_007_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          888,
+          274,
+          966,
+          352
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_007_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          638,
+          272,
+          825,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_007_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_008_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          273,
+          893,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_008_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_008_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          1030,
+          351,
+          1190,
+          511
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_008_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          639,
+          271,
+          828,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_008_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.5,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_009_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1025,
+          351,
+          1187,
+          513
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_009_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          813,
+          273,
+          893,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_009_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_009_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          639,
+          271,
+          828,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_009_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_010_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          273,
+          893,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_010_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_010_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          1024,
+          349,
+          1187,
+          512
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_010_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          639,
+          271,
+          828,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_010_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 1.833,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_011_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          813,
+          273,
+          894,
+          354
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_011_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_011_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          1030,
+          355,
+          1182,
+          507
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_011_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          635,
+          268,
+          831,
+          464
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_011_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 2.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_012_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1036,
+          359,
+          1178,
+          501
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_012_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          817,
+          275,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_012_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_012_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          635,
+          268,
+          831,
+          464
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_012_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 2.167,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          238,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_013_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1033,
+          358,
+          1178,
+          503
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_013_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 6
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          817,
+          275,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_013_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          889,
+          275,
+          965,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_013_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          635,
+          268,
+          831,
+          464
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_013_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 2.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_014_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          814,
+          273,
+          894,
+          353
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_014_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          890,
+          275,
+          967,
+          352
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_014_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          639,
+          271,
+          828,
+          460
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_014_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 3
+      }
+    ]
+  },
+  {
+    "timestamp": 2.5,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          236,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_015_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          817,
+          275,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_015_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_015_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      }
+    ]
+  },
+  {
+    "timestamp": 2.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_016_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          817,
+          274,
+          894,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_016_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_016_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      }
+    ]
+  },
+  {
+    "timestamp": 2.833,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_017_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_017_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_017_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      }
+    ]
+  },
+  {
+    "timestamp": 3.0,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_018_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          93,
+          378,
+          174,
+          459
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_018_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 7
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_018_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_018_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      }
+    ]
+  },
+  {
+    "timestamp": 3.167,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_019_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1035,
+          357,
+          1182,
+          504
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_019_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 8
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          92,
+          376,
+          178,
+          462
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_019_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 7
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_019_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_019_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      }
+    ]
+  },
+  {
+    "timestamp": 3.333,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          962,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_020_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1034,
+          358,
+          1181,
+          505
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_020_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 8
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_020_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          891,
+          274,
+          966,
+          349
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_020_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          641,
+          274,
+          822,
+          455
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_020_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 9
+      }
+    ]
+  },
+  {
+    "timestamp": 3.5,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          963,
+          305
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_021_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1036,
+          359,
+          1180,
+          503
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_021_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 8
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_021_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          890,
+          274,
+          967,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_021_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          641,
+          274,
+          822,
+          455
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_021_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 9
+      }
+    ]
+  },
+  {
+    "timestamp": 3.667,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          895,
+          237,
+          963,
+          305
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_022_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1033,
+          357,
+          1182,
+          506
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_022_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 8
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_022_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          890,
+          274,
+          967,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_022_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          641,
+          274,
+          822,
+          455
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_022_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 9
+      }
+    ]
+  },
+  {
+    "timestamp": 3.833,
+    "frame_size": [
+      1280,
+      720
+    ],
+    "faces": [
+      {
+        "face_id": 0,
+        "bbox": [
+          896,
+          237,
+          963,
+          304
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_023_0.jpg",
+        "detector": "opencv_haar",
+        "track_id": 0
+      },
+      {
+        "face_id": 1,
+        "bbox": [
+          1033,
+          360,
+          1176,
+          503
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_023_1.jpg",
+        "detector": "opencv_haar",
+        "track_id": 8
+      },
+      {
+        "face_id": 2,
+        "bbox": [
+          816,
+          274,
+          892,
+          350
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_023_2.jpg",
+        "detector": "opencv_haar",
+        "track_id": 1
+      },
+      {
+        "face_id": 3,
+        "bbox": [
+          890,
+          274,
+          967,
+          351
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_023_3.jpg",
+        "detector": "opencv_haar",
+        "track_id": 2
+      },
+      {
+        "face_id": 4,
+        "bbox": [
+          641,
+          274,
+          822,
+          455
+        ],
+        "confidence": 0.6,
+        "crop_path": "D:\\Hai\\study\\DeepLerning\\BCDA\\tools\\emotion-data-studio\\data\\faces\\1ad2efa0-6558-4f32-953c-9390bfb4283c_clip_29\\face_023_4.jpg",
+        "detector": "opencv_haar",
+        "track_id": 9
+      }
+    ]
+  }
+]
