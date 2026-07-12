@@ -94,7 +94,10 @@ class VideoDownloader:
                 last_error = e
                 self._log_download_error(attempt, profile, e)
                 if self._should_skip_cookie_profile(e, profile):
-                    print("⚠️ [Downloader] Bỏ qua profile cookie và thử lại không dùng cookies...")
+                    if profile.get("use_cookies"):
+                        print("⚠️ [Downloader] Bỏ qua profile cookie và thử lại không dùng cookies...")
+                    else:
+                        print("⚠️ [Downloader] Lỗi liên quan cookies, thử profile tiếp theo...")
                     continue
                 continue
 
@@ -190,6 +193,10 @@ class VideoDownloader:
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
+            # Tránh yt-dlp cố load cookies mặc định từ Chrome/Edge khi user
+            # chưa cấu hình — đây là work-around cho [yt-dlp#7271] trên Windows
+            # khi Chrome lock file Cookies (browser vẫn đang chạy).
+            "no_cookies_from_browser": True,
             "concurrent_fragment_downloads": profile["concurrent_fragment_downloads"],
             "buffersize": profile["buffersize"],
             "socket_timeout": profile["socket_timeout"],
@@ -226,12 +233,15 @@ class VideoDownloader:
     def _apply_cookie_opts(self, ydl_opts: dict, profile: dict):
         cookie_file = (settings.EDS_DOWNLOAD_COOKIE_FILE or os.getenv("DOWNLOAD_COOKIE_FILE") or "").strip()
         browser = (settings.EDS_DOWNLOAD_COOKIES_BROWSER or os.getenv("DOWNLOAD_COOKIES_BROWSER") or "").strip().lower()
-        if profile.get("use_cookies") or cookie_file or browser:
-            if cookie_file:
-                ydl_opts["cookiefile"] = cookie_file
-            elif browser:
-                ydl_opts["cookiesfrombrowser"] = (browser,)
-                ydl_opts["ignore_no_formats_error"] = True
+        # CHỈ áp dụng cookies khi người dùng thực sự cấu hình cookie_file/browser.
+        # Nếu không, KHÔNG truyền cookiesfrombrowser/cookiefile — để yt-dlp dùng
+        # default (không cookie). Tránh lỗi "Could not copy Chrome cookie database"
+        # khi Chrome bị khóa bởi tiến trình khác.
+        if cookie_file:
+            ydl_opts["cookiefile"] = cookie_file
+        elif browser:
+            ydl_opts["cookiesfrombrowser"] = (browser,)
+            ydl_opts["ignore_no_formats_error"] = True
 
     def _friendly_error_message(self, error: Exception | None) -> str:
         raw = str(error or "")
@@ -306,10 +316,23 @@ class VideoDownloader:
 
     @staticmethod
     def _should_skip_cookie_profile(error: Exception, profile: dict) -> bool:
-        if not profile.get("use_cookies"):
-            return False
+        """
+        Quyết định có skip profile hiện tại và thử profile tiếp theo không.
+
+        - Profile dùng cookies: skip khi lỗi liên quan cookies (Chrome lock, DPAPI…)
+        - Profile KHÔNG dùng cookies nhưng vẫn gặp lỗi cookies: skip luôn
+          (vì yt-dlp đôi khi vẫn mở Chrome db ở chế độ default → fail cả những
+          attempt sau, gây pipeline stop oan)
+        """
         msg = str(error).lower()
-        return any(token in msg for token in ["chrome cookie database", "dpapi", "cookie"])
+        is_cookie_error = any(token in msg for token in [
+            "chrome cookie database",
+            "dpapi",
+            "could not copy cookie",
+            "decrypt with dpapi",
+            "cookiesfrombrowser",
+        ])
+        return is_cookie_error
 
     @staticmethod
     def _log_download_error(attempt: int, profile: dict, exc: Exception):

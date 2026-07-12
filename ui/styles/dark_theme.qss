@@ -97,6 +97,37 @@ QWidget#sidebar {
     border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* ============================================================
+   CUSTOM TITLEBAR (frameless window)
+   ============================================================ */
+
+QWidget#customTitleBar {
+    background-color: #0a0a0f;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+QPushButton#titleBtnMin,
+QPushButton#titleBtnMax,
+QPushButton#titleBtnFullscreen {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+QPushButton#titleBtnMin:hover,
+QPushButton#titleBtnMax:hover,
+QPushButton#titleBtnFullscreen:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+QPushButton#titleBtnClose {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+QPushButton#titleBtnClose:hover {
+    background-color: #e74c3c;
+}
+
 QWidget#sidebarHeader {
     background-color: transparent;
 }

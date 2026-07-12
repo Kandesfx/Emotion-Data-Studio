@@ -127,7 +127,13 @@ class Clip(Base):
     user_emotion = Column(String, nullable=True)                 # Nhãn do user ghi đè
     reviewer_notes = Column(Text, nullable=True)                 # Note của user
     reviewed_at = Column(DateTime, nullable=True)
-    
+
+    # Sprint 2 — Verify pass (Stage 4) metadata
+    verify_verdict = Column(String, nullable=True)              # confirmed | wrong_emotion | unstable | low_quality | stats_mismatch
+    verify_status = Column(String, default="not_run")           # not_run | passed | rejected
+    verify_reasoning = Column(Text, nullable=True)             # Gemini reasoning tu Verify pass
+    rejected_by_verify = Column(Boolean, default=False)         # True neu bi Verify reject
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -180,7 +186,12 @@ class Clip(Base):
             "reviewer_notes": self.reviewer_notes,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            # Sprint 2 — Verify pass
+            "verify_verdict": self.verify_verdict,
+            "verify_status": self.verify_status or "not_run",
+            "verify_reasoning": self.verify_reasoning,
+            "rejected_by_verify": self.rejected_by_verify,
         }
 
     # === Aliases for UI compatibility ===
@@ -199,6 +210,15 @@ class Clip(Base):
     @ai_confidence.setter
     def ai_confidence(self, value):
         self.confidence = value
+
+    # Sprint 2 — ai_intensity la alias cua confidence (de UI/test dung nhat quan)
+    @property
+    def ai_intensity(self):
+        return self.confidence
+
+    @ai_intensity.setter
+    def ai_intensity(self, value):
+        self.confidence = float(value)
 
     @property
     def ai_agreement(self):

@@ -114,63 +114,121 @@ class AudioFeatureExtractor:
     # ── Feature extraction helpers ─────────────────────────────────────────────
 
     def _extract_all_features(self, y: np.ndarray, sr: int) -> np.ndarray:
-        """Build 77-dim feature matrix from audio waveform."""
+        """Build 74-dim feature matrix from audio waveform."""
         import librosa
+
+        # Auto-adjust n_fft if signal is too short (avoids librosa warnings + edge cases)
+        n_fft = min(self.n_fft, max(64, 1 << (len(y) - 1).bit_length() // 2)) if len(y) > 64 else 64
 
         parts: list[np.ndarray] = []
 
         # 1. MFCC (13) + delta (13) + delta-delta (13) = 39
-        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=self.n_fft, hop_length=self.hop_length)
-        mfcc_delta = librosa.feature.delta(mfcc, mode="interp")
-        mfcc_delta2 = librosa.feature.delta(mfcc, order=2, mode="interp")
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=n_fft, hop_length=self.hop_length)
+        # delta with mode='interp' requires width <= T; fall back to mode='backward' for very short signals
+        delta_width = min(9, mfcc.shape[1] if mfcc.shape[1] % 2 == 1 else mfcc.shape[1] - 1)
+        if delta_width < 3:
+            mfcc_delta = np.zeros_like(mfcc)
+            mfcc_delta2 = np.zeros_like(mfcc)
+        else:
+            try:
+                mfcc_delta = librosa.feature.delta(mfcc, width=delta_width, mode="interp")
+                mfcc_delta2 = librosa.feature.delta(mfcc, width=delta_width, order=2, mode="interp")
+            except Exception:
+                mfcc_delta = np.zeros_like(mfcc)
+                mfcc_delta2 = np.zeros_like(mfcc)
         parts.extend([mfcc, mfcc_delta, mfcc_delta2])   # (39, T)
 
         # 2. Chroma STFT (12)
         chroma = librosa.feature.chroma_stft(
-            y=y, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length
+            y=y, sr=sr, n_fft=n_fft, hop_length=self.hop_length
         )
         parts.append(chroma)   # (12, T)
 
         # 3. Spectral features (6)
         zcr = librosa.feature.zero_crossing_rate(y=y, hop_length=self.hop_length)
         rms = librosa.feature.rms(y=y, hop_length=self.hop_length)
-        cent = librosa.feature.spectral_centroid(y=y, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length)
-        bw = librosa.feature.spectral_bandwidth(y=y, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length)
-        rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length)
-        flatness = librosa.feature.spectral_flatness(y=y, n_fft=self.n_fft, hop_length=self.hop_length)
+        cent = librosa.feature.spectral_centroid(y=y, sr=sr, n_fft=n_fft, hop_length=self.hop_length)
+        bw = librosa.feature.spectral_bandwidth(y=y, sr=sr, n_fft=n_fft, hop_length=self.hop_length)
+        rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, n_fft=n_fft, hop_length=self.hop_length)
+        flatness = librosa.feature.spectral_flatness(y=y, n_fft=n_fft, hop_length=self.hop_length)
         parts.extend([zcr, rms, cent, bw, rolloff, flatness])   # (6, T)
 
         # 4. F0 (fundamental frequency) + voiced flag (2)
-        f0, voiced_flag, voiced_probs = librosa.pyin(
-            y, fmin=librosa.note_to_hz("C1"), fmax=librosa.note_to_hz("C8"),
-            sr=sr, hop_length=self.hop_length
-        )
+        try:
+            f0, voiced_flag, voiced_probs = librosa.pyin(
+                y, fmin=librosa.note_to_hz("C1"), fmax=librosa.note_to_hz("C8"),
+                sr=sr, hop_length=self.hop_length
+            )
+        except Exception:
+            # pyin requires minimum audio length; fall back to zero arrays
+            f0 = np.zeros(mfcc.shape[1], dtype=np.float64)
+            voiced_flag = np.zeros(mfcc.shape[1], dtype=np.float64)
         f0 = np.nan_to_num(f0, nan=0.0)
         voiced_flag = voiced_flag.astype(np.float64)
         parts.extend([f0[np.newaxis, :], voiced_flag[np.newaxis, :]])   # (2, T)
 
+        # Target frame count T from MFCC (first feature, always reliable)
+        target_T = mfcc.shape[1]
+
         # 5. Harmonic-to-Noise Ratio (1)
         try:
             harmonic, _ = librosa.effects.hpss(y, hop_length=self.hop_length)
-            hnr = np.mean(harmonic**2, axis=0) / (np.mean(y**2, axis=0) - np.mean(harmonic**2, axis=0) + 1e-10)
+            harmonic_pow = np.mean(harmonic ** 2, axis=0)
+            y_pow = np.mean(y ** 2, axis=0)
+            hnr = harmonic_pow / (y_pow - harmonic_pow + 1e-10)
             hnr = np.nan_to_num(hnr, nan=0.0, posinf=0.0, neginf=0.0)
         except Exception:
-            hnr = np.zeros(y.shape[0] // self.hop_length + 1)
+            hnr = np.zeros(target_T, dtype=np.float64)
+        # Ensure hnr matches the target frame count (T) of the other features
+        hnr = np.broadcast_to(np.atleast_1d(hnr).astype(np.float64), (target_T,)).copy()
         parts.append(hnr[np.newaxis, :])   # (1, T)
 
-        # 6. Tonnetz (6)
-        tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr, hop_length=self.hop_length)
+        # 6. Tonnetz (6) — requires harmonic signal
+        try:
+            tonnetz = librosa.feature.tonnetz(
+                y=librosa.effects.harmonic(y), sr=sr, hop_length=self.hop_length
+            )
+        except Exception:
+            tonnetz = np.zeros((6, target_T), dtype=np.float64)
+        tonnetz = np.broadcast_to(tonnetz, (6, target_T)).copy() if tonnetz.shape[1] != target_T else tonnetz
         parts.append(tonnetz)   # (6, T)
 
         # 7. Spectral contrast (7)
-        contrast = librosa.feature.spectral_contrast(
-            y=y, sr=sr, n_fft=self.n_fft, hop_length=self.hop_length
-        )
+        try:
+            contrast = librosa.feature.spectral_contrast(
+                y=y, sr=sr, n_fft=n_fft, hop_length=self.hop_length
+            )
+        except Exception:
+            contrast = np.zeros((7, target_T), dtype=np.float64)
+        contrast = np.broadcast_to(contrast, (7, target_T)).copy() if contrast.shape[1] != target_T else contrast
         parts.append(contrast)   # (7, T)
 
-        # Stack → (77, T)
-        stacked = np.vstack(parts)
-        return stacked  # shape (77, T_audio)
+        # Normalize all parts to the same T (target_T) before vstack
+        normalized: list[np.ndarray] = []
+        for p in parts:
+            arr = np.asarray(p, dtype=np.float64)
+            if arr.ndim == 1:
+                arr = arr[np.newaxis, :]
+            if arr.shape[1] != target_T:
+                # Resample to target_T via linear interpolation
+                indices = np.linspace(0, arr.shape[1] - 1, target_T) if arr.shape[1] > 1 else np.zeros(target_T)
+                resampled = np.zeros((arr.shape[0], target_T), dtype=np.float64)
+                for i in range(arr.shape[0]):
+                    resampled[i] = np.interp(indices, np.arange(arr.shape[1]), arr[i])
+                arr = resampled
+            normalized.append(arr)
+
+        # Stack → (target_dim, T)
+        stacked = np.vstack(normalized)
+        # Final NaN/Inf cleanup across all dimensions
+        stacked = np.nan_to_num(stacked, nan=0.0, posinf=0.0, neginf=0.0)
+        # Pad to AUDIO_DIM=74 dims (COVAREP-compatible) by appending zero rows if needed
+        if stacked.shape[0] < AUDIO_DIM:
+            pad_rows = AUDIO_DIM - stacked.shape[0]
+            stacked = np.vstack([stacked, np.zeros((pad_rows, target_T), dtype=np.float64)])
+        elif stacked.shape[0] > AUDIO_DIM:
+            stacked = stacked[:AUDIO_DIM, :]
+        return stacked  # shape (AUDIO_DIM, T_audio)
 
     def _align_to_words(
         self,

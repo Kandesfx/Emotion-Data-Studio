@@ -18,17 +18,16 @@ from PySide6.QtWidgets import (
 
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
 
-    QStackedWidget, QStatusBar, QLabel, QSizePolicy
-
+    QStackedWidget, QStatusBar, QLabel, QSizePolicy,
 )
 
-from PySide6.QtCore import Qt, QTimer
-
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, QTimer, QEvent, QSize
+from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut
 
 
 
 from ui.widgets.sidebar import Sidebar
+from ui.widgets.title_bar import TitleBar
 
 from ui.pages.dashboard_page import DashboardPage
 
@@ -44,6 +43,11 @@ from ui.pages.export_page import ExportPage
 from ui.pages.settings_page import SettingsPage
 
 from ui.styles.theme import Colors, Sizes
+
+
+# Ngưỡng responsive
+RESPONSIVE_COLLAPSE_WIDTH = 1100
+RESPONSIVE_STACK_WIDTH = 900
 
 
 
@@ -67,23 +71,36 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Emotion Data Studio")
 
-        self.setMinimumSize(1200, 750)
+        # Frameless — dùng custom TitleBar
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowSystemMenuHint
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+        )
 
+        # Min size nhỏ hơn để user resize thoải mái
+        self.setMinimumSize(900, 600)
+
+        # Default size lớn nhưng KHÔNG maximize
         self.resize(1440, 900)
 
 
-
         # Center window on screen
-
         self._center_on_screen()
 
-
+        self._sidebar_collapsed = False
 
         self._setup_ui()
 
+        self._setup_shortcuts()
         self._setup_statusbar()
 
         self._setup_updater()
+        self._setup_wheel_event_filter()
+
+        QTimer.singleShot(0, self._apply_responsive_state)
 
 
 
@@ -109,50 +126,46 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
 
-        """Build the main UI layout"""
+        """Build main UI: [TitleBar] + [Sidebar | Content]"""
 
         # Central widget
-
         central = QWidget()
 
         central.setObjectName("centralWidget")
 
         self.setCentralWidget(central)
 
+        root_layout = QVBoxLayout(central)
 
+        root_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Main layout: Sidebar + Content
+        root_layout.setSpacing(0)
 
-        main_layout = QHBoxLayout(central)
+        # 1) Title bar
+        self.title_bar = TitleBar("Emotion Data Studio")
+        self.title_bar.minimize_clicked.connect(self._on_minimize_clicked)
+        self.title_bar.maximize_clicked.connect(self._on_maximize_clicked)
+        self.title_bar.close_clicked.connect(self._on_close_clicked)
+        self.title_bar.fullscreen_clicked.connect(self._on_fullscreen_clicked)
+        root_layout.addWidget(self.title_bar)
 
-        main_layout.setContentsMargins(0, 0, 0, 0)
-
-        main_layout.setSpacing(0)
-
-
-
-        # --- Sidebar ---
+        # 2) Body: Sidebar + Content
+        body = QWidget()
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
 
         self.sidebar = Sidebar()
-
         self.sidebar.page_changed.connect(self._on_page_changed)
-
-        main_layout.addWidget(self.sidebar)
-
-
-
-        # --- Content area (Stacked pages) ---
+        body_layout.addWidget(self.sidebar)
 
         self.content_stack = QStackedWidget()
-
         self.content_stack.setObjectName("contentStack")
+        body_layout.addWidget(self.content_stack, stretch=1)
 
-        main_layout.addWidget(self.content_stack, stretch=1)
+        root_layout.addWidget(body, stretch=1)
 
-
-
-        # --- Create pages ---
-
+        # 3) Create pages
         self.dashboard_page = DashboardPage()
 
         self.video_manager_page = VideoManagerPage()
@@ -199,6 +212,114 @@ class MainWindow(QMainWindow):
 
         # --- Load last active video project state on launch ---
         self._load_saved_project()
+
+    def _setup_shortcuts(self):
+        """Global keyboard shortcuts (work regardless of focus)."""
+        QShortcut(QKeySequence(Qt.Key.Key_F11), self,
+                  activated=self._toggle_fullscreen)
+        QShortcut(QKeySequence("Ctrl+Shift+F"), self,
+                  activated=self._toggle_fullscreen)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self,
+                  activated=self._exit_fullscreen)
+        QShortcut(QKeySequence("Alt+F4"), self,
+                  activated=self.close)
+
+    def _setup_wheel_event_filter(self):
+        """
+        Global event filter: chặn wheel làm thay đổi SpinBox/Slider/ComboBox
+        khi user cuộn trang mà widget dưới chuột không có focus.
+        """
+        from PySide6.QtWidgets import (QDoubleSpinBox, QSpinBox, QSlider,
+                                       QComboBox, QApplication)
+
+        parent = self
+
+        class _WheelGuard(QWidget):
+            def eventFilter(self, obj, event):
+                if event.type() != QEvent.Type.Wheel:
+                    return False
+                if isinstance(obj, (QDoubleSpinBox, QSpinBox, QSlider)):
+                    if not obj.hasFocus():
+                        event.ignore()
+                        return True
+                elif isinstance(obj, QComboBox):
+                    if not obj.hasFocus():
+                        try:
+                            if obj.view() and obj.view().isVisible():
+                                return False
+                        except Exception:
+                            pass
+                        event.ignore()
+                        return True
+                return False
+
+        self._wheel_guard = _WheelGuard(self)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self._wheel_guard)
+
+    def _on_minimize_clicked(self):
+        self.showMinimized()
+
+    def _on_maximize_clicked(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+        self.title_bar.set_maximized_state(self.isMaximized())
+
+    def _on_close_clicked(self):
+        self.close()
+
+    def _on_fullscreen_clicked(self, is_fullscreen: bool):
+        if is_fullscreen:
+            self.showFullScreen()
+        else:
+            self.showNormal()
+        self.title_bar.set_fullscreen_state(is_fullscreen)
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self._exit_fullscreen()
+        else:
+            self._on_fullscreen_clicked(True)
+
+    def _exit_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.title_bar.set_fullscreen_state(False)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._apply_responsive_state()
+        if hasattr(self, 'title_bar'):
+            self.title_bar.set_maximized_state(self.isMaximized())
+
+    def _apply_responsive_state(self):
+        """Sidebar collapse khi width < 1100, settings grid stack khi < 900."""
+        width = self.width()
+        if width < RESPONSIVE_COLLAPSE_WIDTH:
+            if not self._sidebar_collapsed:
+                self._sidebar_collapsed = True
+                if hasattr(self.sidebar, 'set_collapsed'):
+                    self.sidebar.set_collapsed(True)
+        else:
+            if self._sidebar_collapsed:
+                self._sidebar_collapsed = False
+                if hasattr(self.sidebar, 'set_collapsed'):
+                    self.sidebar.set_collapsed(False)
+        try:
+            if hasattr(self.settings_page, 'set_responsive_mode'):
+                self.settings_page.set_responsive_mode(width < RESPONSIVE_STACK_WIDTH)
+        except Exception:
+            pass
+
+    def changeEvent(self, event):
+        """Sync titlebar khi window state thay đổi (maximize via Win+Up, etc.)."""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            if hasattr(self, 'title_bar'):
+                self.title_bar.set_maximized_state(self.isMaximized())
 
 
 
@@ -277,8 +398,11 @@ class MainWindow(QMainWindow):
         page_names = ["Bảng Điều Khiển", "Quản Lý Video", "Xử Lý", "Soạn Đoạn", "Kiểm Duyệt", "Xuất & Đồng Bộ", "Cài Đặt"]
 
         if 0 <= index < len(page_names):
-
-            self.status_label.setText(f"📍 {page_names[index]}")
+            try:
+                if hasattr(self, 'status_label') and self.status_label is not None:
+                    self.status_label.setText(f"📍 {page_names[index]}")
+            except RuntimeError:
+                pass
 
 
 
@@ -394,7 +518,11 @@ class MainWindow(QMainWindow):
 
             self.dashboard_page.set_active_video(video_id)
 
-        self.status_label.setText(f"Active video set: {video_id[:8]}...")
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText(f"Active video set: {video_id[:8]}...")
+        except RuntimeError:
+            pass
 
 
 
@@ -425,8 +553,11 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self, data: dict):
 
         """Refresh diagnostics-aware pages after settings change."""
-
-        self.status_label.setText("Cài đặt đã lưu")
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText("Cài đặt đã lưu")
+        except RuntimeError:
+            pass
 
         if hasattr(self.processing_page, 'refresh_data'):
 
@@ -450,7 +581,11 @@ class MainWindow(QMainWindow):
 
             self.dashboard_page.set_active_video(video_id)
 
-        self.status_label.setText(f"Active video set: {video_id[:8]}...")
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText(f"Active video set: {video_id[:8]}...")
+        except RuntimeError:
+            pass
 
 
 
@@ -523,8 +658,11 @@ class MainWindow(QMainWindow):
     def _on_processing_completed(self, video_id: str):
 
         """Khi pipeline hoàn thành: cập nhật dữ liệu, đặt video active, kết nối nút Xem kết quả."""
-
-        self.status_label.setText(f"✅ Hoàn thành xử lý video {video_id[:8]}...")
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText(f"✅ Hoàn thành xử lý video {video_id[:8]}...")
+        except RuntimeError:
+            pass
 
         # 1. Cập nhật Quản lý Video
         if hasattr(self.video_manager_page, 'refresh_data'):
@@ -551,7 +689,11 @@ class MainWindow(QMainWindow):
         self.content_stack.setCurrentIndex(4)
         if hasattr(self.review_page, 'refresh_data'):
             self.review_page.refresh_data()
-        self.status_label.setText("📍 Kiểm Duyệt — Clip đã sẵn sàng để kiểm tra")
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText("📍 Kiểm Duyệt — Clip đã sẵn sàng để kiểm tra")
+        except RuntimeError:
+            pass
 
     def _update_gpu_status(self):
 
@@ -600,8 +742,12 @@ class MainWindow(QMainWindow):
     def set_status(self, message: str):
 
         """Update status bar message"""
-
-        self.status_label.setText(message)
+        if not hasattr(self, 'status_label') or self.status_label is None:
+            return
+        try:
+            self.status_label.setText(message)
+        except RuntimeError:
+            pass
 
 
 

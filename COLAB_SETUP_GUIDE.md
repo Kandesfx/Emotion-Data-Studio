@@ -238,8 +238,8 @@ Colab chưa kết nối được. Kiểm tra:
 
 ```python
 import sys
-sys.path.insert(0, "/content/BCDA")
 sys.path.insert(0, "/content/BCDA/tools/emotion-data-studio")
+sys.path.insert(0, "/content/BCDA")
 ```
 
 ### "Gemini not configured"

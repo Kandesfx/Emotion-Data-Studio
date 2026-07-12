@@ -1,29 +1,144 @@
 """
-Emotion Data Studio — Gemini Auto-Labeler
-========================================
-Phân tích cảm xúc trên video dùng Google Gemini trên Vertex AI.
+Emotion Data Studio — Vertex AI Client
+=====================================
+Helper chuẩn hoá việc khởi tạo Google GenAI client cho Vertex AI.
 
-Model: gemini-2.5-flash (tối ưu cho multimodal video understanding)
-Endpoint: Vertex AI (google.genai SDK, enterprise-grade)
-Credentials: gcloud Application Default Credentials
+Theo docs/09_vertex_ai_integration.md:
+  - Gemini Enterprise Agent Platform bắt buộc dùng location="global".
+  - Ưu tiên `google-genai` SDK, fallback thủ công qua REST.
+  - Project ID đọc từ GOOGLE_APPLICATION_CREDENTIALS (file JSON key).
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
-import re
-import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger("EDS-Gemini")
+logger = logging.getLogger("EDS-VertexAI")
 
-# ── Constants ─────────────────────────────────────────────
+VERTEX_GLOBAL_LOCATION = "global"
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+
+def _load_service_account_info(path: str | Path) -> dict[str, Any]:
+    """Đọc file key JSON của service account, trả về dict thông tin."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Service account key not found: {p}")
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Khong doc duoc service account key {p}: {exc}") from exc
+
+
+def _resolve_credentials() -> tuple[Any, str]:
+    """
+    Tra ve (credentials, project_id) tu service account JSON.
+
+    Uu tien:
+      1. GOOGLE_APPLICATION_CREDENTIALS env
+      2. backend.config.settings.GOOGLE_APPLICATION_CREDENTIALS
+      3. application-default credentials (gcloud auth login)
+    """
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if not creds_path:
+        try:
+            from backend.config import settings
+            creds_path = getattr(settings, "GOOGLE_APPLICATION_CREDENTIALS", None)
+        except Exception:
+            creds_path = None
+
+    if creds_path and Path(creds_path).exists():
+        info = _load_service_account_info(creds_path)
+        project_id = (
+            os.getenv("GCP_PROJECT_ID")
+            or info.get("project_id")
+            or "aura-social-vn"
+        )
+        try:
+            from google.oauth2 import service_account as sa  # type: ignore
+            scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+            creds = sa.Credentials.from_service_account_file(creds_path, scopes=scopes)
+            return creds, project_id
+        except Exception as exc:
+            logger.warning(f"Khong tao duoc service_account.Credentials: {exc}")
+            # Fallback: tra info de caller tu xu ly
+            return {"_raw_info": info, "_path": creds_path}, project_id
+
+    # Fallback: application-default credentials
+    import google.auth as gauth  # type: ignore
+    creds, project = gauth.default()
+    if not creds.token or not creds.valid:
+        try:
+            from google.auth.transport import requests as grequests  # type: ignore
+            creds.refresh(grequests.Request())
+        except Exception as exc:
+            raise RuntimeError(
+                "Khong xac thuc duoc Google credentials. "
+                "Hay dat GOOGLE_APPLICATION_CREDENTIALS hoac chay 'gcloud auth application-default login'. "
+                f"Chi tiet: {exc}"
+            ) from exc
+    return creds, (os.getenv("GCP_PROJECT_ID") or project or "aura-social-vn")
+
+
+def get_genai_client(
+    location: str = VERTEX_GLOBAL_LOCATION,
+    api_version: str = "v1",
+    force_vertex: bool = True,
+) -> tuple[Any, str, str]:
+    """
+    Tra ve (client, project_id, location) cho google-genai SDK.
+
+    - location="global" mac dinh (theo docs/09).
+    - neu force_vertex=False va co GEMINI_API_KEY thi tra ve AI Studio client.
+    - Neu SDK chua duoc cai, raise RuntimeError voi huong dan.
+    """
+    try:
+        import google.genai as genai  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "Chua cai google-genai SDK. Chay: pip install google-genai"
+        ) from exc
+
+    if not force_vertex:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            return genai.Client(api_key=api_key), "ai-studio", "global"
+
+    creds, project_id = _resolve_credentials()
+    return (
+        genai.Client(
+            vertexai=True,
+            credentials=creds,
+            project=project_id,
+            location=location,
+            http_options={"api_version": api_version},
+        ),
+        project_id,
+        location,
+    )
+
+
+def is_vertex_configured() -> tuple[bool, str]:
+    """Kiem tra Vertex AI da san sang chua (credentials + project)."""
+    try:
+        creds, project = _resolve_credentials()
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path:
+            try:
+                from backend.config import settings
+                creds_path = getattr(settings, "GOOGLE_APPLICATION_CREDENTIALS", None)
+            except Exception:
+                pass
+        if creds_path:
+            return True, f"Vertex AI (global) ready, project={project}, key={Path(creds_path).name}"
+        return True, f"Vertex AI (global) ready, project={project}, ADC"
+    except Exception as exc:
+        return False, f"Vertex AI chua cau hinh: {exc}"
+
+
 EMOTION_LABELS = ["happy", "sad", "angry", "fear", "surprise", "disgust", "neutral"]
 EMOTION_DESCRIPTIONS = {
     "happy": "vui vẻ, hạnh phúc, cười đùa, phấn khích",
@@ -109,7 +224,13 @@ class GeminiAutoLabeler:
         self.model = model or getattr(settings, "GEMINI_MODEL", None) or DEFAULT_MODEL
         self.temperature = temperature or getattr(settings, "GEMINI_TEMPERATURE", None) or 0.15
         self.max_output_tokens = max_output_tokens or getattr(settings, "GEMINI_MAX_TOKENS", None) or 8192
-        self.location = location or getattr(settings, "VERTEX_LOCATION", None) or "us-central1"
+        # Per docs/09_vertex_ai_integration.md: Gemini Enterprise phai dung "global"
+        # cho Agent Studio; default neu user khong override.
+        self.location = (
+            location
+            or getattr(settings, "VERTEX_LOCATION", None)
+            or VERTEX_GLOBAL_LOCATION
+        )
 
         self.agent_url: str | None = getattr(settings, "AGENT_RUNTIME_URL", None)
         self.agent_api_key: str | None = getattr(settings, "AGENT_API_KEY", None)
@@ -194,32 +315,33 @@ class GeminiAutoLabeler:
     # ── Client (Vertex AI only) ────────────────────────────
 
     def _resolve_client(self) -> Any:
-        """Tạo google.genai.Client dùng Vertex AI credentials."""
+        """Tạo google.genai.Client — ưu tiên API Key, fallback Vertex AI global."""
         if self._client is not None:
             return self._client
 
-        import google.genai as genai  # type: ignore[attr-defined]
-        import google.auth as gauth  # type: ignore[attr-defined]
+        from backend.services.gemini_auto_labeler import get_genai_client
 
-        creds, project = gauth.default()
-        if not creds.token or not creds.valid:
-            from google.auth.transport import requests as grequests  # type: ignore[attr-defined]
-            creds.refresh(grequests.Request())
-
-        gcp_project = os.getenv("GCP_PROJECT_ID") or project
-        if not gcp_project:
-            raise RuntimeError(
-                "Khong xac dinh duoc GCP project. "
-                "Dat GCP_PROJECT_ID trong .env hoac chay 'gcloud auth application-default login'"
-            )
-
-        self._client = genai.Client(
-            vertexai=True,
-            credentials=creds,
-            project=gcp_project,
-            location=self.location,
+        api_key = os.getenv("GEMINI_API_KEY") or getattr(
+            __import__("backend.config", fromlist=["settings"]).settings,
+            "GEMINI_API_KEY", None
         )
-        logger.info(f"GeminiAutoLabeler: Vertex AI, project={gcp_project}, location={self.location}, model={self.model}")
+        try:
+            if api_key:
+                self._client, project_id, location = get_genai_client(
+                    location="global", force_vertex=False
+                )
+                logger.info(f"GeminiAutoLabeler: Gemini API Key, model={self.model}")
+                return self._client
+        except Exception as exc:
+            logger.warning(f"API key client init failed, fallback Vertex AI: {exc}")
+
+        self._client, project_id, location = get_genai_client(
+            location=self.location, force_vertex=True
+        )
+        logger.info(
+            f"GeminiAutoLabeler: Vertex AI, project={project_id}, "
+            f"location={location}, model={self.model}"
+        )
         return self._client
 
     # ── Video helpers ─────────────────────────────────────
@@ -685,19 +807,19 @@ class GeminiAutoLabeler:
     # ── Config / Status ───────────────────────────────────
 
     def is_configured(self) -> tuple[bool, str]:
-        """Kiểm tra Vertex AI credentials."""
+        """Kiem tra Gemini credentials (Vertex AI global hoac API key)."""
+        api_key = os.getenv("GEMINI_API_KEY") or getattr(
+            __import__("backend.config", fromlist=["settings"]).settings,
+            "GEMINI_API_KEY", None
+        )
+        if api_key:
+            return True, f"San sang (Gemini API Key, model={self.model})"
+
         try:
-            import google.auth as gauth  # type: ignore[attr-defined]
-            creds, project = gauth.default()
-            if not creds.token or not creds.valid:
-                from google.auth.transport import requests as grequests  # type: ignore[attr-defined]
-                creds.refresh(grequests.Request())
-            gcp_project = os.getenv("GCP_PROJECT_ID") or project
-            if gcp_project:
-                return True, f"San sang (Vertex AI, project={gcp_project}, model={self.model})"
+            from backend.services.gemini_auto_labeler import is_vertex_configured
+            return is_vertex_configured()
         except Exception as exc:
-            return False, f"Loi: {exc}"
-        return False, "Chua cau hinh Vertex AI credentials"
+            return False, f"Vertex AI chua cau hinh: {exc}"
 
     def status(self) -> dict[str, Any]:
         """Tra ve trang thai cau hinh."""

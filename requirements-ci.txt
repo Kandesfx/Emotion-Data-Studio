@@ -1,0 +1,21 @@
+# CI-only dependencies for Emotion Data Studio
+# This file contains ONLY the deps required by:
+#   - scripts/verify_integration_imports.py
+#   - tests/test_sprint{1,2,3}_autocut.py
+#   - tests/test_p0_config.py
+#   - tests/test_p1_architecture.py
+# The full requirements.txt installs torch, whisper, openai-whisper, etc.
+# which take 10+ minutes and are not needed for static checks.
+
+# Config + settings (pydantic-settings already pulls pydantic)
+pydantic-settings>=2.2.0
+
+# Test runner
+pytest>=7.4.0
+
+# Required by backend.config and UI attribute introspection
+PySide6>=6.7.0
+
+# Used by ai_video_segmenter for response_schema typing (optional import,
+# tests should still pass if missing — guarded by try/except)
+google-genai>=1.0.0

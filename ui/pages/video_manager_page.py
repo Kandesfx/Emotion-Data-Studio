@@ -45,6 +45,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.styles.theme import Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
+
 
 class VideoManagerPage(QWidget):
     """Video/clip project manager."""
@@ -66,71 +75,115 @@ class VideoManagerPage(QWidget):
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 18, 24, 18)
-        root.setSpacing(14)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        header = QHBoxLayout()
-        title_box = QVBoxLayout()
-        title = QLabel("Video Manager")
-        title.setObjectName("pageTitle")
-        title_box.addWidget(title)
-        subtitle = QLabel("Manage source videos, child clips, batch review state, and active workspace scope.")
-        subtitle.setObjectName("pageSubtitle")
-        title_box.addWidget(subtitle)
-        header.addLayout(title_box, stretch=1)
-        self.active_label = QLabel("Active video: none")
-        self.active_label.setObjectName("accentText")
-        header.addWidget(self.active_label)
-        root.addLayout(header)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        root.addWidget(scroll)
 
-        self._build_filters(root)
+        content = QWidget()
+        scroll.setWidget(content)
+        self.main_layout = QVBoxLayout(content)
+        self.main_layout.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        self.main_layout.setSpacing(Spacing.LG)
+
+        # Hero header
+        header = PageHeader(
+            "Quản Lý Video",
+            "Quản lý video nguồn, clip con, trạng thái duyệt hàng loạt và dự án đang làm.",
+            icon="fa5s.film",
+        )
+        # right slot: active video pill
+        self.active_pill = StatusPill("info", "Chưa chọn dự án")
+        header.set_right_widget(self.active_pill)
+        self.main_layout.addWidget(header)
+
+        self._build_filters(self.main_layout)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._build_tree_panel())
         splitter.addWidget(self._build_detail_panel())
         splitter.setSizes([560, 660])
-        root.addWidget(splitter, stretch=1)
+        splitter.setChildrenCollapsible(False)
+        self.main_layout.addWidget(splitter, stretch=1)
 
-        self._build_actions(root)
+        self._build_actions(self.main_layout)
 
     def _build_filters(self, root_layout):
-        card = QFrame()
-        card.setObjectName("card")
-        layout = QHBoxLayout(card)
-        layout.setSpacing(10)
+        card = Card("default")
 
+        # Row 1: search
+        search_row = QHBoxLayout()
+        search_row.setSpacing(Spacing.SM)
+        if _HAS_QTA:
+            search_icon = QLabel()
+            search_icon.setPixmap(qta.icon("fa5s.search", color=Colors.TEXT_SECONDARY).pixmap(14, 14))
+            search_icon.setStyleSheet("background: transparent;")
+            search_row.addWidget(search_icon)
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search title, path, label, transcript, notes...")
+        self.search_box.setPlaceholderText("Tìm theo tên, đường dẫn, nhãn, transcript, ghi chú…")
+        self.search_box.setMinimumHeight(36)
         self.search_box.textChanged.connect(self.refresh_data)
-        layout.addWidget(self.search_box, stretch=1)
+        search_row.addWidget(self.search_box, stretch=1)
+        refresh_btn = ActionButton("Làm mới", "fa5s.sync-alt", variant="ghost")
+        refresh_btn.clicked.connect(self.refresh_data)
+        search_row.addWidget(refresh_btn)
+        card.addLayout(search_row)
 
-        layout.addWidget(QLabel("Video:"))
-        self.status_filter = QComboBox()
-        self.status_filter.addItems(["All", "pending", "processing", "completed", "error", "cancelled"])
-        self.status_filter.currentTextChanged.connect(self.refresh_data)
-        layout.addWidget(self.status_filter)
+        # Row 2: filters grid
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(Spacing.SM)
 
-        layout.addWidget(QLabel("Clip:"))
-        self.clip_status_filter = QComboBox()
-        self.clip_status_filter.addItems(["All", "pending", "needs_review", "ai_labeled", "approved", "auto_approved", "rejected", "failed"])
-        self.clip_status_filter.currentTextChanged.connect(self.refresh_data)
-        layout.addWidget(self.clip_status_filter)
+        for label, widget_factory in [
+            ("Video", lambda: self._make_combo(["All", "pending", "processing", "completed", "error", "cancelled"], "status")),
+            ("Clip",  lambda: self._make_combo(["All", "pending", "needs_review", "ai_labeled", "approved", "auto_approved", "rejected", "failed"], "clip")),
+            ("Nhãn",  lambda: self._make_combo(["All", "unlabeled", "happy", "sad", "angry", "fear", "surprise", "disgust", "neutral"], "label")),
+        ]:
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; font-size: 11px;")
+            col.addWidget(lbl)
+            combo = widget_factory()
+            col.addWidget(combo)
+            wrap = QWidget()
+            wrap.setLayout(col)
+            wrap.setStyleSheet("background: transparent;")
+            filter_row.addWidget(wrap, stretch=1)
 
-        layout.addWidget(QLabel("Label:"))
-        self.label_filter = QComboBox()
-        self.label_filter.addItems(["All", "unlabeled", "happy", "sad", "angry", "fear", "surprise", "disgust", "neutral"])
-        self.label_filter.currentTextChanged.connect(self.refresh_data)
-        layout.addWidget(self.label_filter)
-
-        self.show_empty_check = QCheckBox("Show empty videos")
+        # Show empty checkbox
+        empty_col = QVBoxLayout()
+        empty_col.setSpacing(2)
+        spacer = QLabel("")
+        spacer.setStyleSheet("background: transparent; font-size: 11px;")
+        empty_col.addWidget(spacer)
+        self.show_empty_check = QCheckBox("Hiển thị video rỗng")
         self.show_empty_check.setChecked(True)
         self.show_empty_check.stateChanged.connect(self.refresh_data)
-        layout.addWidget(self.show_empty_check)
+        self.show_empty_check.setStyleSheet("background: transparent;")
+        empty_col.addWidget(self.show_empty_check)
+        empty_wrap = QWidget()
+        empty_wrap.setLayout(empty_col)
+        empty_wrap.setStyleSheet("background: transparent;")
+        filter_row.addWidget(empty_wrap)
+        card.addLayout(filter_row)
 
-        refresh_btn = QPushButton("Refresh")
-        refresh_btn.clicked.connect(self.refresh_data)
-        layout.addWidget(refresh_btn)
         root_layout.addWidget(card)
+
+    def _make_combo(self, items: list, kind: str) -> QComboBox:
+        combo = QComboBox()
+        combo.addItems(items)
+        combo.setMinimumHeight(36)
+        combo.currentTextChanged.connect(self.refresh_data)
+        if kind == "status":
+            self.status_filter = combo
+        elif kind == "clip":
+            self.clip_status_filter = combo
+        elif kind == "label":
+            self.label_filter = combo
+        return combo
 
     def _build_tree_panel(self) -> QWidget:
         panel = QFrame()
@@ -192,34 +245,40 @@ class VideoManagerPage(QWidget):
         return panel
 
     def _build_actions(self, root_layout):
-        card = QFrame()
-        card.setObjectName("cardElevated")
-        layout = QHBoxLayout(card)
-        layout.setSpacing(10)
-        self.import_urls_btn = QPushButton("Import URLs")
-        self.import_urls_btn.setObjectName("primaryBtn")
+        card = Card("elevated")
+
+        # Primary actions row
+        primary_row = QHBoxLayout()
+        primary_row.setSpacing(Spacing.SM)
+        self.import_urls_btn = ActionButton("Nhập URLs", "fa5s.link", variant="primary")
         self.import_urls_btn.clicked.connect(self._open_import_dialog)
-        layout.addWidget(self.import_urls_btn)
-        self.open_review_btn = QPushButton("Open Active in Review")
+        primary_row.addWidget(self.import_urls_btn)
+        self.open_review_btn = ActionButton("Mở dự án active trong Duyệt", "fa5s.eye", variant="secondary")
         self.open_review_btn.clicked.connect(self._open_active_review)
-        layout.addWidget(self.open_review_btn)
-        self.open_segment_btn = QPushButton("Open Active in Segment Editor")
+        primary_row.addWidget(self.open_review_btn)
+        self.open_segment_btn = ActionButton("Mở dự án active trong Soạn Đoạn", "fa5s.cut", variant="secondary")
         self.open_segment_btn.clicked.connect(self._open_active_segment)
-        layout.addWidget(self.open_segment_btn)
-        layout.addStretch()
-        self.batch_status_btn = QPushButton("Batch Status")
+        primary_row.addStretch()
+        card.addLayout(primary_row)
+
+        # Secondary / batch actions row
+        secondary_row = QHBoxLayout()
+        secondary_row.setSpacing(Spacing.SM)
+        self.batch_status_btn = ActionButton("Đổi trạng thái hàng loạt", "fa5s.tasks", variant="ghost")
         self.batch_status_btn.clicked.connect(self._batch_change_status)
-        layout.addWidget(self.batch_status_btn)
-        self.batch_label_btn = QPushButton("Batch Label")
+        secondary_row.addWidget(self.batch_status_btn)
+        self.batch_label_btn = ActionButton("Gán nhãn hàng loạt", "fa5s.tags", variant="ghost")
         self.batch_label_btn.clicked.connect(self._batch_set_label)
-        layout.addWidget(self.batch_label_btn)
-        self.rename_btn = QPushButton("Rename / Edit")
+        secondary_row.addWidget(self.batch_label_btn)
+        self.rename_btn = ActionButton("Đổi tên / Sửa", "fa5s.edit", variant="ghost")
         self.rename_btn.clicked.connect(self._edit_selected)
-        layout.addWidget(self.rename_btn)
-        self.delete_checked_btn = QPushButton("Delete Checked")
-        self.delete_checked_btn.setObjectName("dangerBtn")
+        secondary_row.addWidget(self.rename_btn)
+        secondary_row.addStretch()
+        self.delete_checked_btn = ActionButton("Xóa mục đã chọn", "fa5s.trash-alt", variant="danger")
         self.delete_checked_btn.clicked.connect(self._delete_checked)
-        layout.addWidget(self.delete_checked_btn)
+        secondary_row.addWidget(self.delete_checked_btn)
+        card.addLayout(secondary_row)
+
         root_layout.addWidget(card)
 
     # Data ---------------------------------------------------------------
@@ -379,7 +438,12 @@ class VideoManagerPage(QWidget):
             item.setExpanded(video_id == self._active_video_id or bool(self.search_box.text().strip()))
         self.tree.blockSignals(False)
         active_title = self._videos.get(self._active_video_id, {}).get("title") or "none"
-        self.active_label.setText(f"Active video: {active_title}")
+        if hasattr(self, 'active_pill') and self.active_pill is not None:
+            try:
+                short = (active_title[:40] + "…") if len(str(active_title)) > 40 else active_title
+                self.active_pill.set_status("success", f"Active: {short}")
+            except RuntimeError:
+                pass
         self._update_summary()
 
     # Details / preview --------------------------------------------------

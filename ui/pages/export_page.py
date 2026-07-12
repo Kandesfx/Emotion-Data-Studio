@@ -31,6 +31,15 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
 )
 
+from ui.styles.theme import Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
+
 from ui.styles.theme import Colors
 
 
@@ -58,15 +67,18 @@ class ExportPage(QWidget):
         content = QWidget()
         scroll.setWidget(content)
         self.main_layout = QVBoxLayout(content)
-        self.main_layout.setContentsMargins(32, 24, 32, 24)
-        self.main_layout.setSpacing(20)
+        self.main_layout.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        self.main_layout.setSpacing(Spacing.LG)
 
-        title = QLabel("Xuất & Đồng Bộ")
-        title.setObjectName("pageTitle")
-        self.main_layout.addWidget(title)
-        subtitle = QLabel("Xuất bộ dữ liệu cảm xúc sạch với kiểm tra chất lượng và metadata có thể tái tạo.")
-        subtitle.setObjectName("pageSubtitle")
-        self.main_layout.addWidget(subtitle)
+        # Hero header
+        header = PageHeader(
+            "Xuất & Đồng Bộ",
+            "Xuất bộ dữ liệu cảm xúc sạch với kiểm tra chất lượng và metadata có thể tái tạo.",
+            icon="fa5s.cloud-download-alt",
+        )
+        self.export_pill = StatusPill("muted", "Sẵn sàng")
+        header.set_right_widget(self.export_pill)
+        self.main_layout.addWidget(header)
 
         self._build_quality_gate_section()
         self._build_export_section()
@@ -75,35 +87,38 @@ class ExportPage(QWidget):
         self.main_layout.addStretch()
 
     def _build_quality_gate_section(self):
-        card = QFrame()
-        card.setObjectName("cardElevated")
-        layout = QVBoxLayout(card)
-        layout.setSpacing(12)
+        card = Card("elevated")
 
         row = QHBoxLayout()
+        row.setSpacing(Spacing.SM)
         title = QLabel("Kiểm Tra Chất Lượng")
-        title.setObjectName("sectionTitle")
+        from PySide6.QtGui import QFont
+        title.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; font-weight: {int(QFont.Weight.DemiBold)};"
+            f" background: transparent;"
+        )
         row.addWidget(title)
         row.addStretch()
-        self.refresh_stats_btn = QPushButton("Làm mới thống kê")
+        self.refresh_stats_btn = ActionButton("Làm mới thống kê", "fa5s.sync-alt", variant="ghost")
         self.refresh_stats_btn.clicked.connect(self.refresh_data)
         row.addWidget(self.refresh_stats_btn)
-        layout.addLayout(row)
+        card.addLayout(row)
 
         stats_row = QHBoxLayout()
+        stats_row.setSpacing(Spacing.MD)
         self.total_count_label    = self._stat_box(stats_row, "0", "Tổng clip",    Colors.TEXT_PRIMARY)
         self.ready_count_label    = self._stat_box(stats_row, "0", "Xuất được",    Colors.SUCCESS)
         self.rejected_count_label = self._stat_box(stats_row, "0", "Bị loại",     Colors.ERROR)
         self.balance_label        = self._stat_box(stats_row, "0", "Cảm xúc",     Colors.ACCENT_LIGHT)
         self.est_size_label       = self._stat_box(stats_row, "0 MB", "Kích thước ước tính", Colors.INFO)
         stats_row.addStretch()
-        layout.addLayout(stats_row)
+        card.addLayout(stats_row)
 
         self.quality_report = QPlainTextEdit()
         self.quality_report.setObjectName("logViewer")
         self.quality_report.setReadOnly(True)
         self.quality_report.setMaximumHeight(160)
-        layout.addWidget(self.quality_report)
+        card.addWidget(self.quality_report)
         self.main_layout.addWidget(card)
 
     def _stat_box(self, parent_layout, value: str, label: str, color: str) -> QLabel:
@@ -119,32 +134,57 @@ class ExportPage(QWidget):
         return value_label
 
     def _build_export_section(self):
-        card = QFrame()
-        card.setObjectName("card")
-        layout = QVBoxLayout(card)
-        layout.setSpacing(12)
+        card = Card("default")
 
+        from PySide6.QtGui import QFont
         title = QLabel("Xuất Cục Bộ")
-        title.setObjectName("sectionTitle")
-        layout.addWidget(title)
-        format_hint = QLabel("Chọn kiểu xuất dataset. Xuất đầy đủ sẽ sao chép clip, audio và annotation khuôn mặt; metadata gọn phù hợp để kiểm tra nhanh; chỉ nhãn dùng cho phân tích nhẹ.")
-        format_hint.setObjectName("mutedText")
+        title.setStyleSheet(
+            f"color: {Colors.TEXT_PRIMARY}; font-weight: {int(QFont.Weight.DemiBold)};"
+            f" background: transparent;"
+        )
+        card.addWidget(title)
+        format_hint = QLabel(
+            "Chọn kiểu xuất dataset. Đầy đủ sẽ sao chép clip + audio + annotation + metadata; "
+            "metadata gọn phù hợp kiểm tra nhanh; chỉ nhãn dùng cho phân tích nhẹ."
+        )
+        format_hint.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         format_hint.setWordWrap(True)
-        layout.addWidget(format_hint)
+        card.addWidget(format_hint)
 
+        # 3 radio cards grid (cleaner than horizontal row)
         self.format_group = QButtonGroup(self)
-        format_row = QHBoxLayout()
-        self.radio_full    = QRadioButton("Đầy đủ: clip + audio + annotation + metadata")
-        self.radio_compact = QRadioButton("Metadata gọn: nhãn, split, quality report")
-        self.radio_labels  = QRadioButton("Chỉ nhãn: labels.csv / labels.jsonl")
-        self.radio_compact.setChecked(True)
-        for radio in (self.radio_full, self.radio_compact, self.radio_labels):
-            self.format_group.addButton(radio)
-            format_row.addWidget(radio)
-        format_row.addStretch()
-        layout.addLayout(format_row)
+        radio_grid = QHBoxLayout()
+        radio_grid.setSpacing(Spacing.MD)
 
+        self.radio_full    = QRadioButton("Đầy đủ")
+        self.radio_compact = QRadioButton("Metadata gọn")
+        self.radio_labels  = QRadioButton("Chỉ nhãn")
+        self.radio_compact.setChecked(True)
+
+        radio_descriptions = {
+            self.radio_full:    "clip + audio + annotation + metadata",
+            self.radio_compact: "nhãn, split, quality report",
+            self.radio_labels:  "labels.csv / labels.jsonl",
+        }
+        for radio, desc in radio_descriptions.items():
+            self.format_group.addButton(radio)
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            col.addWidget(radio)
+            hint = QLabel(desc)
+            hint.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; padding-left: 22px; font-size: 11px;")
+            hint.setWordWrap(True)
+            col.addWidget(hint)
+            wrap = QFrame()
+            wrap.setObjectName("card")
+            wrap.setLayout(col)
+            wrap.setStyleSheet("background: rgba(255,255,255,0.02); border-radius: 8px; padding: 8px;")
+            radio_grid.addWidget(wrap, stretch=1)
+        card.addLayout(radio_grid)
+
+        # Checkbox options
         options = QVBoxLayout()
+        options.setSpacing(Spacing.XS)
         self.check_approved_only = QCheckBox("Chỉ clip đã duyệt / tự động duyệt")
         self.check_approved_only.setChecked(True)
         self.check_auto_split    = QCheckBox("Tự động chia train/val/test (70/15/15)")
@@ -154,35 +194,33 @@ class ExportPage(QWidget):
         for checkbox in (self.check_approved_only, self.check_auto_split, self.check_stratified):
             checkbox.stateChanged.connect(self.refresh_data)
             options.addWidget(checkbox)
-        layout.addLayout(options)
+        card.addLayout(options)
 
         self.export_progress = QProgressBar()
         self.export_progress.setObjectName("progressLarge")
         self.export_progress.setValue(0)
         self.export_progress.setVisible(False)
-        layout.addWidget(self.export_progress)
+        card.addWidget(self.export_progress)
 
         self.export_status_label = QLabel("")
-        self.export_status_label.setObjectName("mutedText")
+        self.export_status_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         self.export_status_label.setVisible(False)
-        layout.addWidget(self.export_status_label)
+        card.addWidget(self.export_status_label)
 
         buttons = QHBoxLayout()
-        self.export_btn = QPushButton("Xuất ra Thư Mục")
-        self.export_btn.setObjectName("primaryBtn")
-        self.export_btn.setMinimumWidth(190)
+        buttons.setSpacing(Spacing.SM)
+        self.export_btn = ActionButton("Xuất ra Thư Mục", "fa5s.folder-open", variant="primary")
         self.export_btn.clicked.connect(self._on_export)
         buttons.addWidget(self.export_btn)
-        self.cancel_btn = QPushButton("Hủy Xuất")
-        self.cancel_btn.setObjectName("dangerBtn")
+        self.cancel_btn = ActionButton("Hủy Xuất", "fa5s.stop", variant="danger")
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(self._on_cancel_export)
         buttons.addWidget(self.cancel_btn)
         buttons.addStretch()
-        self.mmsa_export_btn = QPushButton("Xuất MMSA (.pkl) cho MulT")
+        self.mmsa_export_btn = ActionButton("Xuất MMSA (.pkl) cho MulT", "fa5s.database", variant="secondary")
         self.mmsa_export_btn.clicked.connect(self._on_mmsa_export)
         buttons.addWidget(self.mmsa_export_btn)
-        layout.addLayout(buttons)
+        card.addLayout(buttons)
         self.main_layout.addWidget(card)
 
     def _build_output_section(self):

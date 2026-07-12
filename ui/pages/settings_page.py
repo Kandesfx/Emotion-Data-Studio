@@ -30,6 +30,14 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets.custom_spinbox import FocusDoubleSpinBox
+from ui.styles.theme import Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
 
 
 class SettingsPage(QWidget):
@@ -43,32 +51,91 @@ class SettingsPage(QWidget):
         self._setup_ui()
         self.load_settings()
 
+    def set_responsive_mode(self, stacked: bool):
+        """Stack 2-column grid thành 1-column khi window < 900px."""
+        try:
+            if hasattr(self, '_basic_grid_wrap_l'):
+                if stacked:
+                    # Move right column children up to top-level layout
+                    # Easiest: rebuild layout. Hide the grid instead.
+                    self._basic_grid_wrap_l.setVisible(False)
+                    self._basic_grid_wrap_r.setVisible(False)
+                    # Show all cards at top level
+                    if hasattr(self, '_stacked_cards'):
+                        for w in self._stacked_cards:
+                            w.setVisible(True)
+                else:
+                    self._basic_grid_wrap_l.setVisible(True)
+                    self._basic_grid_wrap_r.setVisible(True)
+                    if hasattr(self, '_stacked_cards'):
+                        for w in self._stacked_cards:
+                            w.setVisible(False)
+        except Exception:
+            pass
+
     def _setup_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         root.addWidget(scroll)
 
         content = QWidget()
         scroll.setWidget(content)
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(32, 24, 32, 24)
-        layout.setSpacing(18)
+        layout.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        layout.setSpacing(Spacing.LG)
 
-        title = QLabel("Cài Đặt")
-        title.setObjectName("pageTitle")
-        layout.addWidget(title)
+        # Hero header
+        header = PageHeader(
+            "Cài Đặt",
+            "FFmpeg, đường dẫn dữ liệu, runtime AI, Vertex AI và các tùy chọn pipeline.",
+            icon="fa5s.sliders-h",
+        )
+        self.settings_pill = StatusPill("info", "Chưa lưu thay đổi")
+        header.set_right_widget(self.settings_pill)
+        layout.addWidget(header)
 
-        subtitle = QLabel("Cấu hình FFmpeg, tải video từ URL, cache mô hình, runtime và cài đặt phân đoạn.")
-        subtitle.setObjectName("pageSubtitle")
-        layout.addWidget(subtitle)
+        # AI / Vertex AI section first (highlighted as it's the premium feature)
+        layout.addWidget(self._build_vertex_ai_card())
 
-        layout.addWidget(self._build_paths_card())
-        layout.addWidget(self._build_performance_card())
-        layout.addWidget(self._build_download_card())
-        layout.addWidget(self._build_pipeline_card())
+        # Hidden stacked cards (visible khi responsive stacked mode)
+        self._stacked_cards = [
+            self._build_paths_card(),
+            self._build_performance_card(),
+            self._build_download_card(),
+            self._build_pipeline_card(),
+        ]
+        for w in self._stacked_cards:
+            w.setVisible(False)
+            layout.addWidget(w)
+
+        # 2-column grid for basic settings (compact)
+        col_l = QVBoxLayout()
+        col_l.setSpacing(Spacing.LG)
+        col_l.addWidget(self._stacked_cards[0])  # paths
+        col_l.addWidget(self._stacked_cards[1])  # performance
+        col_l.addStretch()
+        col_r = QVBoxLayout()
+        col_r.setSpacing(Spacing.LG)
+        col_r.addWidget(self._stacked_cards[2])  # download
+        col_r.addWidget(self._stacked_cards[3])  # pipeline
+        col_r.addStretch()
+
+        self._basic_grid_wrap_l = QWidget()
+        self._basic_grid_wrap_l.setLayout(col_l)
+        self._basic_grid_wrap_l.setStyleSheet("background: transparent;")
+        self._basic_grid_wrap_r = QWidget()
+        self._basic_grid_wrap_r.setLayout(col_r)
+        self._basic_grid_wrap_r.setStyleSheet("background: transparent;")
+        grid_row = QHBoxLayout()
+        grid_row.setSpacing(Spacing.LG)
+        grid_row.addWidget(self._basic_grid_wrap_l, stretch=1)
+        grid_row.addWidget(self._basic_grid_wrap_r, stretch=1)
+        layout.addLayout(grid_row)
+
         layout.addWidget(self._build_smart_segmentation_card())
         layout.addWidget(self._build_cloud_card())
         layout.addWidget(self._build_diagnostics_card())
@@ -174,10 +241,11 @@ class SettingsPage(QWidget):
         self.max_duration = self._double_row(layout, "Thời lượng clip tối đa", 1.0, 300.0, 15.0, 0.5)
 
         actions = QHBoxLayout()
-        self.save_btn = QPushButton("Lưu cài đặt")
+        actions.setSpacing(Spacing.SM)
+        self.save_btn = ActionButton("Lưu cài đặt", "fa5s.save", variant="primary")
         self.save_btn.clicked.connect(self.save_settings)
         actions.addWidget(self.save_btn)
-        self.reload_btn = QPushButton("Tải lại")
+        self.reload_btn = ActionButton("Tải lại", "fa5s.undo", variant="ghost")
         self.reload_btn.clicked.connect(self.load_settings)
         actions.addWidget(self.reload_btn)
         actions.addStretch()
@@ -220,6 +288,103 @@ class SettingsPage(QWidget):
         silence_row.addWidget(self.smart_silence_threshold_db, stretch=1)
         layout.addLayout(silence_row)
         return card
+
+    def _build_vertex_ai_card(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("cardElevated")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
+
+        title = QLabel("Vertex AI — Gemini Auto-Cut")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+        note = QLabel(
+            "Cấu hình kết nối Vertex AI (Gemini) và bật/tắt chế độ AI tự cắt video. "
+            "Service account key phải có quyền 'Agent Platform User' trên project 'aura-social-vn'."
+        )
+        note.setObjectName("mutedText")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        self.vertex_location_input = self._path_row(
+            layout, "Vertex Location (global)", placeholder="global"
+        )
+        self.gemini_model_input = self._path_row(
+            layout, "Gemini model", placeholder="gemini-2.5-flash"
+        )
+        self.gemini_api_key_input = self._path_row(
+            layout, "Gemini API Key (tùy chọn, để dùng AI Studio thay Vertex)",
+            placeholder="AIza..."
+        )
+        self.gac_path_input = self._path_row(
+            layout, "GOOGLE_APPLICATION_CREDENTIALS (Service Account JSON)",
+            browse_file=True, placeholder="aura-social-vn-*.json"
+        )
+
+        autocut_row = QHBoxLayout()
+        autocut_row.addWidget(QLabel("Bật AI Auto-Cut mặc định"))
+        self.ai_autocut_combo = QComboBox()
+        self.ai_autocut_combo.addItems(["false", "true"])
+        self.ai_autocut_combo.setToolTip(
+            "Khi bật, Vertex AI sẽ thay thế stage scene_split + smart_segmenter. "
+            "Pipeline tự fallback nếu Vertex AI lỗi."
+        )
+        autocut_row.addWidget(self.ai_autocut_combo, stretch=1)
+        layout.addLayout(autocut_row)
+
+        self.ai_autocut_threshold = self._double_row(
+            layout, "Intensity threshold (0-1)", 0.3, 1.0, 0.55, 0.05
+        )
+        self.ai_autocut_min_duration = self._double_row(
+            layout, "Thời lượng clip tối thiểu (giây)", 1.0, 30.0, 3.0, 0.5
+        )
+        self.ai_autocut_max_duration = self._double_row(
+            layout, "Thời lượng clip tối đa (giây)", 5.0, 60.0, 15.0, 0.5
+        )
+        self.ai_autocut_max_segments = self._double_row(
+            layout, "Số segment tối đa mỗi video", 5, 80, 40, 1
+        )
+        # Sprint 2 + 3 — Verify pass settings
+        self.ai_autocut_verify_strict_combo = QComboBox()
+        self.ai_autocut_verify_strict_combo.addItems(["false", "true"])
+        self.ai_autocut_verify_strict_combo.setToolTip(
+            "Khi true: clip bị Verify reject (unstable/low_quality/emotion_flip) "
+            "sẽ bị loại khỏi output. Khi false: giữ lại với flag."
+        )
+        strict_row = QHBoxLayout()
+        strict_row.addWidget(QLabel("Verify strict mode"))
+        strict_row.addWidget(self.ai_autocut_verify_strict_combo, stretch=1)
+        layout.addLayout(strict_row)
+        self.ai_autocut_min_face_coverage = self._double_row(
+            layout, "Min face coverage scene", 0.50, 0.95, 0.70, 0.05
+        )
+
+        # Trang thai
+        check_row = QHBoxLayout()
+        check_row.addWidget(QLabel("Trạng thái"))
+        self.vertex_status_lbl = QLabel("Chưa kiểm tra")
+        self.vertex_status_lbl.setObjectName("mutedText")
+        check_row.addWidget(self.vertex_status_lbl, stretch=1)
+        self.vertex_check_btn = QPushButton("Kiểm tra ngay")
+        self.vertex_check_btn.clicked.connect(self._check_vertex_status)
+        check_row.addWidget(self.vertex_check_btn)
+        layout.addLayout(check_row)
+        return card
+
+    def _check_vertex_status(self) -> None:
+        """Kiem tra ngay Vertex AI config va cap nhat status label."""
+        try:
+            from backend.services.gemini_auto_labeler import is_vertex_configured
+            ok, msg = is_vertex_configured()
+            if ok:
+                self.vertex_status_lbl.setText(f"✅ {msg}")
+                self.vertex_status_lbl.setStyleSheet("color: #00b894;")
+            else:
+                self.vertex_status_lbl.setText(f"❌ {msg}")
+                self.vertex_status_lbl.setStyleSheet("color: #e17055;")
+        except Exception as exc:
+            self.vertex_status_lbl.setText(f"⚠️ {exc}")
+            self.vertex_status_lbl.setStyleSheet("color: #9896a8;")
 
     def _build_cloud_card(self) -> QFrame:
         card = QFrame()
@@ -321,10 +486,12 @@ class SettingsPage(QWidget):
         layout.addWidget(self.diagnostics_output)
         return card
 
-    def _path_row(self, parent_layout: QVBoxLayout, label: str, browse_file=False, browse_dir=False) -> QLineEdit:
+    def _path_row(self, parent_layout: QVBoxLayout, label: str, browse_file=False, browse_dir=False, placeholder: str = "") -> QLineEdit:
         row = QHBoxLayout()
         row.addWidget(QLabel(label))
         edit = QLineEdit()
+        if placeholder:
+            edit.setPlaceholderText(placeholder)
         row.addWidget(edit, stretch=1)
         browse = QPushButton("Duyệt")
         if browse_file:
@@ -387,6 +554,17 @@ class SettingsPage(QWidget):
             "smart_silence_threshold_db": self.smart_silence_threshold_db.text().strip() or "-35dB",
             "smart_silence_min_duration": self.smart_silence_min_duration.value(),
             "smart_max_dialogue_extension": self.smart_max_dialogue_extension.value(),
+            "vertex_location": self.vertex_location_input.text().strip() or "global",
+            "gemini_model": self.gemini_model_input.text().strip() or "gemini-2.5-flash",
+            "gemini_api_key": self.gemini_api_key_input.text().strip(),
+            "google_application_credentials": self.gac_path_input.text().strip(),
+            "ai_autocut_enabled": self.ai_autocut_combo.currentText() == "true",
+            "ai_autocut_intensity_threshold": self.ai_autocut_threshold.value(),
+            "ai_autocut_min_duration": self.ai_autocut_min_duration.value(),
+            "ai_autocut_max_duration": self.ai_autocut_max_duration.value(),
+            "ai_autocut_max_segments": int(self.ai_autocut_max_segments.value()),
+            "ai_autocut_verify_strict": self.ai_autocut_verify_strict_combo.currentText() == "true",
+            "ai_autocut_min_face_coverage_in_scene": self.ai_autocut_min_face_coverage.value(),
         }
 
     def load_settings(self):
@@ -457,6 +635,22 @@ class SettingsPage(QWidget):
         self.smart_silence_threshold_db.setText(str(data.get("smart_silence_threshold_db") or "-35dB"))
         self.smart_silence_min_duration.setValue(float(data.get("smart_silence_min_duration") or 0.45))
         self.smart_max_dialogue_extension.setValue(float(data.get("smart_max_dialogue_extension") or 1.5))
+
+        self.vertex_location_input.setText(str(data.get("vertex_location") or settings.VERTEX_LOCATION or "global"))
+        self.gemini_model_input.setText(str(data.get("gemini_model") or settings.GEMINI_MODEL or "gemini-2.5-flash"))
+        self.gemini_api_key_input.setText(str(data.get("gemini_api_key") or ""))
+        gac = data.get("google_application_credentials") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+        self.gac_path_input.setText(str(gac))
+        self.ai_autocut_combo.setCurrentText("true" if data.get("ai_autocut_enabled") else "false")
+        self.ai_autocut_threshold.setValue(float(data.get("ai_autocut_intensity_threshold") or 0.55))
+        self.ai_autocut_min_duration.setValue(float(data.get("ai_autocut_min_duration") or 3.0))
+        self.ai_autocut_max_duration.setValue(float(data.get("ai_autocut_max_duration") or 15.0))
+        self.ai_autocut_max_segments.setValue(float(data.get("ai_autocut_max_segments") or 40))
+        self.ai_autocut_verify_strict_combo.setCurrentText(
+            "true" if data.get("ai_autocut_verify_strict", False) else "false")
+        self.ai_autocut_min_face_coverage.setValue(
+            float(data.get("ai_autocut_min_face_coverage_in_scene") or 0.70))
+
         self.run_diagnostics()
 
     def save_settings(self):
@@ -498,6 +692,46 @@ class SettingsPage(QWidget):
         os.environ["SMART_SILENCE_THRESHOLD_DB"] = data["smart_silence_threshold_db"]
         os.environ["SMART_SILENCE_MIN_DURATION"] = str(data["smart_silence_min_duration"])
         os.environ["SMART_MAX_DIALOGUE_EXTENSION"] = str(data["smart_max_dialogue_extension"])
+
+        # Vertex AI / Gemini
+        os.environ["VERTEX_LOCATION"] = data["vertex_location"]
+        os.environ["GEMINI_MODEL"] = data["gemini_model"]
+        if data.get("gemini_api_key"):
+            os.environ["GEMINI_API_KEY"] = data["gemini_api_key"]
+        if data.get("google_application_credentials"):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = data["google_application_credentials"]
+        os.environ["AI_AUTOCUT_ENABLED"] = "true" if data["ai_autocut_enabled"] else "false"
+        os.environ["AI_AUTOCUT_INTENSITY_THRESHOLD"] = str(data["ai_autocut_intensity_threshold"])
+        os.environ["AI_AUTOCUT_MIN_DURATION"] = str(data["ai_autocut_min_duration"])
+        os.environ["AI_AUTOCUT_MAX_DURATION"] = str(data["ai_autocut_max_duration"])
+        os.environ["AI_AUTOCUT_MAX_SEGMENTS"] = str(data["ai_autocut_max_segments"])
+        os.environ["AI_AUTOCUT_VERIFY_STRICT"] = str(
+            data.get("ai_autocut_verify_strict", False)
+        ).lower()
+        os.environ["AI_AUTOCUT_MIN_FACE_COVERAGE_IN_SCENE"] = str(
+            data.get("ai_autocut_min_face_coverage_in_scene", 0.70)
+        )
+
+        # Apply to in-memory settings too (khong can restart)
+        try:
+            from backend.config import settings as _settings
+            _settings.VERTEX_LOCATION = data["vertex_location"]
+            _settings.GEMINI_MODEL = data["gemini_model"]
+            if data.get("gemini_api_key"):
+                _settings.GEMINI_API_KEY = data["gemini_api_key"]
+            if data.get("google_application_credentials"):
+                _settings.GOOGLE_APPLICATION_CREDENTIALS = data["google_application_credentials"]
+            _settings.AI_AUTOCUT_ENABLED = bool(data["ai_autocut_enabled"])
+            _settings.AI_AUTOCUT_INTENSITY_THRESHOLD = float(data["ai_autocut_intensity_threshold"])
+            _settings.AI_AUTOCUT_MIN_DURATION = float(data["ai_autocut_min_duration"])
+            _settings.AI_AUTOCUT_MAX_DURATION = float(data["ai_autocut_max_duration"])
+            _settings.AI_AUTOCUT_MAX_SEGMENTS = int(data["ai_autocut_max_segments"])
+            _settings.AI_AUTOCUT_VERIFY_STRICT = bool(data.get("ai_autocut_verify_strict", False))
+            _settings.AI_AUTOCUT_MIN_FACE_COVERAGE_IN_SCENE = float(
+                data.get("ai_autocut_min_face_coverage_in_scene", 0.70)
+            )
+        except Exception:
+            pass
 
         self.settings_saved.emit(data)
         self.run_diagnostics()

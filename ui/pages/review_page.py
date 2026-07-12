@@ -51,7 +51,14 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from ui.styles.theme import EMOTION_MAP, Colors
+from ui.styles.theme import EMOTION_MAP, Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
 
 
 
@@ -451,38 +458,43 @@ class ReviewPage(QWidget):
         row1.addWidget(self.clip_counter)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("🔍  Tìm kiếm transcript / tên clip...")
+        self.search_box.setPlaceholderText("Tìm kiếm transcript / tên clip…")
+        self.search_box.setMinimumHeight(36)
         self.search_box.textChanged.connect(self._apply_filters)
         row1.addWidget(self.search_box, stretch=1)
 
-        self.reload_btn = QPushButton("  Tải lại")
-        self.reload_btn.setObjectName("ghostBtn")
-        self.reload_btn.setFixedWidth(90)
+        self.reload_btn = ActionButton("Tải lại", "fa5s.sync-alt", variant="ghost")
         self.reload_btn.clicked.connect(self.refresh_data)
         row1.addWidget(self.reload_btn)
         bar_layout.addLayout(row1)
 
-        # ── Hàng 2: các bộ lọc ─────────────────────────────────────────────
+        # ── Row 2: filters ──────────────────────────────────────
         row2 = QHBoxLayout()
-        row2.setSpacing(8)
+        row2.setSpacing(Spacing.SM)
 
-        row2.addWidget(QLabel("Trạng thái:"))
+        status_lbl = QLabel("Trạng thái:")
+        status_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        row2.addWidget(status_lbl)
         self.filter_status = QComboBox()
         self.filter_status.setMinimumWidth(110)
+        self.filter_status.setMinimumHeight(36)
         self.filter_status.addItems(["Tất cả", "pending", "needs_review", "ai_labeled", "approved", "rejected", "failed"])
         self.filter_status.currentTextChanged.connect(self._apply_filters)
         row2.addWidget(self.filter_status)
 
-        row2.addWidget(QLabel("Cảm xúc:"))
+        emo_lbl = QLabel("Cảm xúc:")
+        emo_lbl.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
+        row2.addWidget(emo_lbl)
         self.filter_emotion = QComboBox()
         self.filter_emotion.setMinimumWidth(110)
+        self.filter_emotion.setMinimumHeight(36)
         emotion_items = ["Tất cả"] + [info.get("label", k) for k, info in EMOTION_MAP.items()]
         self._emotion_filter_keys = ["Tất cả"] + list(EMOTION_MAP.keys())
         self.filter_emotion.addItems(emotion_items)
         self.filter_emotion.currentIndexChanged.connect(self._apply_filters)
         row2.addWidget(self.filter_emotion)
 
-        self.only_incongruity = QCheckBox("⚠️ Không đồng nhất")
+        self.only_incongruity = QCheckBox("Chỉ clip không đồng nhất")
         self.only_incongruity.stateChanged.connect(self._apply_filters)
         row2.addWidget(self.only_incongruity)
 
@@ -558,13 +570,20 @@ class ReviewPage(QWidget):
         self.media_player.durationChanged.connect(self._on_duration_changed)
 
         controls = QHBoxLayout()
-        self.prev_btn = QPushButton("◀  Trước")
+        controls.setSpacing(Spacing.SM)
+        self.prev_btn = ActionButton("", "fa5s.step-backward", variant="ghost")
+        self.prev_btn.setToolTip("Clip trước (←)")
+        self.prev_btn.setFixedWidth(40)
         self.prev_btn.clicked.connect(self._go_prev)
         controls.addWidget(self.prev_btn)
-        self.play_btn = QPushButton("▶  Phát")
+        self.play_btn = ActionButton("", "fa5s.play", variant="primary")
+        self.play_btn.setToolTip("Phát / Dừng (Space)")
+        self.play_btn.setFixedWidth(40)
         self.play_btn.clicked.connect(self._toggle_play)
         controls.addWidget(self.play_btn)
-        self.next_btn = QPushButton("Tiếp  ▶")
+        self.next_btn = ActionButton("", "fa5s.step-forward", variant="ghost")
+        self.next_btn.setToolTip("Clip tiếp (→)")
+        self.next_btn.setFixedWidth(40)
         self.next_btn.clicked.connect(self._go_next)
         controls.addWidget(self.next_btn)
 
@@ -978,7 +997,7 @@ class ReviewPage(QWidget):
             self.audio_output.setMuted(True)
             self.media_player.setPlaybackRate(2.5)
             self.media_player.play()
-            self.play_btn.setText("▶  Phát")
+            self.play_btn.setIcon(qta.icon("fa5s.play", color=Colors.TEXT_PRIMARY))
         else:
             self.media_player.setSource(QUrl())
             self.clip_meta.setText(self.clip_meta.text() + " | missing file")
@@ -1108,7 +1127,7 @@ class ReviewPage(QWidget):
             self.media_player.setPlaybackRate(1.0)
             self.media_player.setPosition(0)
             self.media_player.play()
-            self.play_btn.setText("⏸  Dừng")
+            self.play_btn.setIcon(qta.icon("fa5s.pause", color=Colors.TEXT_PRIMARY))
         else:
             if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 # Go back to preview loop
@@ -1116,13 +1135,13 @@ class ReviewPage(QWidget):
                 self.audio_output.setMuted(True)
                 self.media_player.setPlaybackRate(2.5)
                 self.media_player.play()
-                self.play_btn.setText("▶  Phát")
+                self.play_btn.setIcon(qta.icon("fa5s.play", color=Colors.TEXT_PRIMARY))
             else:
                 self._is_preview_mode = False
                 self.audio_output.setMuted(False)
                 self.media_player.setPlaybackRate(1.0)
                 self.media_player.play()
-                self.play_btn.setText("⏸  Dừng")
+                self.play_btn.setIcon(qta.icon("fa5s.pause", color=Colors.TEXT_PRIMARY))
 
     def _go_prev(self):
         if self._current_index > 0:
@@ -1277,7 +1296,7 @@ class ReviewPage(QWidget):
         self._go_next()
 
     def _on_gemini_verify(self):
-        """Gọi Gemini để verify/re-score clip hiện tại."""
+        """Gọi Gemini Verify pass (Sprint 2) de re-score clip hien tai."""
         if not self._current_clip:
             return
 
@@ -1290,14 +1309,14 @@ class ReviewPage(QWidget):
             return
 
         self.gemini_btn.setEnabled(False)
-        self.gemini_btn.setText("🤖 Đang phân tích...")
+        self.gemini_btn.setText("Dang phan tich...")
         QApplication.processEvents()
 
         try:
-            from backend.services.gemini_auto_labeler import GeminiAutoLabeler
-            labeler = GeminiAutoLabeler()
+            from backend.services.ai_video_segmenter import AIVideoSegmenter
+            segmenter = AIVideoSegmenter()
 
-            configured, msg = labeler.is_configured()
+            configured, msg = segmenter.is_configured()
             if not configured:
                 QMessageBox.warning(
                     self, "Chua cau hinh Gemini",
@@ -1306,55 +1325,105 @@ class ReviewPage(QWidget):
                 )
                 return
 
-            result = labeler.analyze_clip(clip_path=clip_path, intensity_threshold=0.5)
-            analysis = result.get("analysis", {})
+            # Lay emotion/intensity hien tai cua clip
+            current_emotion = (
+                self._current_clip.get("emotion")
+                or self._current_clip.get("ai_emotion")
+                or self._current_clip.get("gem_emotion")
+                or "neutral"
+            )
+            current_intensity = (
+                self._current_clip.get("intensity")
+                or self._current_clip.get("ai_intensity")
+                or self._current_clip.get("gem_confidence")
+                or 0.5
+            )
+            clip_id = self._current_clip.get("id", "unknown")
 
-            if isinstance(analysis, dict):
-                emotion = analysis.get("emotion") or analysis.get("predicted_emotion")
-                intensity = analysis.get("intensity") or analysis.get("confidence", 0)
-                reasoning = analysis.get("reasoning", "")
+            result = segmenter.verify_clip(
+                clip_path=clip_path,
+                predicted_emotion=str(current_emotion),
+                predicted_intensity=float(current_intensity),
+                transcript="",  # Transcriber chua chay o day
+                audio_features=None,
+                face_stats=None,
+            )
 
-                # Cập nhật UI
-                self._current_clip["gem_confidence"] = intensity
-                self._current_clip["gem_emotion"] = emotion
-                self._current_clip["gem_reasoning"] = reasoning
+            verdict = result.get("verdict", "unknown")
+            verified_emotion = result.get("emotion", current_emotion)
+            verified_intensity = result.get("intensity", current_intensity)
+            reasoning = result.get("reasoning", "")
+            status = result.get("status", "")
 
-                # Highlight emotion button nếu khác với hiện tại
-                if emotion and emotion != self._current_clip.get("ai_emotion"):
-                    reply = QMessageBox.question(
-                        self, "Gemini đề xuất nhãn khác",
-                        f"Gemini gợi ý nhãn: **{emotion.upper()}** (confidence: {intensity:.0%})\n\n"
-                        f"Reasoning: {reasoning}\n\n"
-                        f"Có muốn áp dụng không?",
-                        QMessageBox.Yes | QMessageBox.No,
-                    )
-                    if reply == QMessageBox.Yes:
-                        self._set_emotion(emotion)
-                        self._save_current_review()
+            # Merge voi Stage 2 (current)
+            merged = segmenter.combine_verdicts(
+                {"emotion": current_emotion, "intensity": current_intensity},
+                result,
+            )
+            final_emotion = merged.get("emotion", verified_emotion)
+            final_intensity = merged.get("intensity", verified_intensity)
+            verify_status = merged.get("verify_status", "passed")
+            rejected = merged.get("rejected_by_verify", False)
 
-                # Hiển thị kết quả
-                QMessageBox.information(
-                    self, "Gemini Verify Hoàn Tất",
-                    f"Emotion: {emotion or 'N/A'}\n"
-                    f"Confidence: {intensity:.1%}\n"
-                    f"Cost: ${result.get('total_cost_usd', 0):.4f}\n\n"
-                    f"Reasoning: {reasoning[:200]}"
+            # Cap nhat UI
+            self._current_clip["gem_emotion"] = verified_emotion
+            self._current_clip["gem_confidence"] = verified_intensity
+            self._current_clip["gem_reasoning"] = reasoning
+            self._current_clip["verify_verdict"] = verdict
+            self._current_clip["verify_status"] = verify_status
+            self._current_clip["verify_reasoning"] = reasoning
+            self._current_clip["rejected_by_verify"] = rejected
+
+            # Cap nhat label hien thi tren review page
+            self._update_verify_badge(verdict, verify_status)
+
+            # Hien thi ket qua
+            verdict_emoji = {
+                "confirmed": "✅", "wrong_emotion": "⚠️",
+                "unstable": "🔄", "low_quality": "❌",
+                "stats_mismatch": "❓",
+            }.get(verdict, "❓")
+            verdict_text = verdict_emoji + " " + verdict.upper()
+
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("Gemini Verify Hoan Tat")
+            msg_box.setText(
+                f"<b>Verdict:</b> {verdict_text}<br><br>"
+                f"<b>Emotion:</b> {final_emotion} "
+                f"(Verify: {verified_emotion})<br>"
+                f"<b>Intensity:</b> {final_intensity:.2f} "
+                f"(Verify: {verified_intensity:.2f})<br>"
+                f"<b>Status:</b> {'REJECTED' if rejected else 'PASSED'}<br>"
+                f"<b>Reasoning:</b><br>{reasoning[:300]}"
+            )
+            msg_box.setTextFormat(Qt.RichText)
+            msg_box.exec()
+
+            # Neu emotion thay doi → hoi user co muon ap dung khong
+            if final_emotion and final_emotion != current_emotion:
+                reply = QMessageBox.question(
+                    self, "Emotion thay doi",
+                    f"Gemini de xuat nhan: **{final_emotion.upper()}** "
+                    f"(confidence: {final_intensity:.0%})\n\n"
+                    f"Co muon ap dung khong?",
+                    QMessageBox.Yes | QMessageBox.No,
                 )
-            else:
-                QMessageBox.warning(self, "Kết quả không hợp lệ", str(analysis))
+                if reply == QMessageBox.Yes:
+                    self._set_emotion(final_emotion)
+                    self._save_current_review()
 
         except ImportError as exc:
             QMessageBox.critical(
-                self, "Thiếu thư viện",
-                f"google.genai chưa được cài hoặc Vertex AI credentials chưa được cấu hình:\n{exc}\n\n"
-                "Chạy: pip install google-genai\n"
-                "Hoặc: gcloud auth application-default login"
+                self, "Thieu thu vien",
+                f"google.genai chua duoc cai hoac Vertex AI credentials chua cau hinh:\n{exc}\n\n"
+                "Chay: pip install google-genai\n"
+                "Hoac: gcloud auth application-default login"
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Lỗi Gemini", str(exc))
+            QMessageBox.critical(self, "Loi Gemini", str(exc))
         finally:
             self.gemini_btn.setEnabled(True)
-            self.gemini_btn.setText("🤖  Gemini Verify")
+            self.gemini_btn.setText("Gemini Verify")
 
     def _save_current_review(self, show_message: bool = True):
         if not self._current_clip:
@@ -1381,6 +1450,35 @@ class ReviewPage(QWidget):
                 self.video_summary.setText("Review saved")
         except Exception as exc:
             QMessageBox.warning(self, "Save failed", str(exc))
+
+    def _update_verify_badge(self, verdict: str, verify_status: str) -> None:
+        """Cap nhat badge/tren thong tin verify tren review page.
+
+        Cap nhat label hoac status tren UI de hien thi verify verdict.
+        Neu co attribute tren Clip model → update luon vao DB.
+        """
+        try:
+            from backend.database.local_db import get_session
+            from backend.database.models import Clip
+            if not self._current_clip:
+                return
+            clip_id = self._current_clip.get("id")
+            if not clip_id:
+                return
+            session = get_session()
+            try:
+                clip = session.query(Clip).filter(Clip.id == clip_id).first()
+                if clip:
+                    clip.verify_verdict = verdict
+                    clip.verify_status = verify_status
+                    clip.rejected_by_verify = (verify_status == "rejected")
+                    session.commit()
+                    self._current_clip["verify_verdict"] = verdict
+                    self._current_clip["verify_status"] = verify_status
+            finally:
+                session.close()
+        except Exception:
+            pass  # Non-critical: badge update fail khong anh huong workflow
 
     def _update_status(self, new_status: str):
         try:

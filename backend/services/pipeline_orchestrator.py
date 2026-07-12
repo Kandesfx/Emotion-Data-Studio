@@ -1,6 +1,7 @@
 import os
 import json
 import traceback
+from typing import Any
 import cv2
 from sqlalchemy.orm import Session
 from backend.database.models import Video, Clip, Feature
@@ -98,7 +99,7 @@ class PipelineOrchestrator:
             
             if video.source_url and not video_file_path:
                 print(f"📥 [Pipeline] Stage 1: Đang tải video từ YouTube URL: {video.source_url}...")
-                
+
                 last_pct = -1
                 def download_hook(d):
                     nonlocal last_pct
@@ -124,8 +125,19 @@ class PipelineOrchestrator:
                 if progress_callback:
                     progress_callback("download", 0, 100, f"📥 [Download] Bắt đầu tải video từ YouTube URL...")
 
-                download_res = self.downloader.download(video.source_url, progress_hook=download_hook)
-                
+                # Sprint 3 — Phan biet AI AutoCut mode (clip duration > 30 phut)
+                # va classic mode (tai full video).
+                processing_mode_hint = getattr(video, "processing_mode", None) or ""
+                if processing_mode_hint == "ai_autocut":
+                    download_res = self.download_youtube_for_ai_autocut(
+                        url=video.source_url,
+                        progress_callback=progress_callback,
+                    )
+                else:
+                    download_res = self.downloader.download(
+                        video.source_url, progress_hook=download_hook
+                    )
+
                 # Cập nhật thông tin video sau tải
                 video.file_path = download_res["file_path"]
                 video.duration_sec = download_res["duration_sec"]
@@ -133,6 +145,14 @@ class PipelineOrchestrator:
                 if download_res.get("title") and (not video.title or video.title == "Unknown" or video.title == "Untitled"):
                     video.title = download_res["title"]
                 video_file_path = download_res["file_path"]
+                # Sprint 3 — luu flag truncated de UI/debug biet
+                if download_res.get("was_truncated"):
+                    try:
+                        video.error_msg = (
+                            f"YouTube truncated: chi xu ly {download_res['truncated_duration_sec']:.0f}s dau."
+                        )
+                    except Exception:
+                        pass
                 db.commit()
                 print(f"✅ [Pipeline] Stage 1: Tải thành công video. Độ dài: {video.duration_sec}s")
                 if progress_callback:
@@ -195,69 +215,55 @@ class PipelineOrchestrator:
                 if progress_callback:
                     progress_callback("scene_split", 70, 100, f"✂️ [Smart Segment] Fallback scene-only: {smart_err}")
             
-            # Cắt video theo smart candidates và lọc theo thời lượng
-            clips_metadata = self.splitter.split_video(
-                video_file_path,
-                scenes_for_split,
-                video_id,
-                min_duration=settings.MIN_CLIP_DURATION,
-                max_duration=settings.MAX_CLIP_DURATION,
-            )
-            total_clips = len(clips_metadata)
-            
-            video.total_clips = total_clips
-            db.commit()
-            print(f"✅ [Pipeline] Stage 2: Hoàn tất. Đã tạo ra {total_clips} clips hợp lệ để xử lý AI")
-            if progress_callback:
-                progress_callback("scene_split", 100, 100, f"✂️ [Scene Split] Hoàn tất. Đã tạo ra {total_clips} clips hợp lệ")
-
-            # ── GEMINI PRE-FILTERING (Vertex AI) ─────────────────────────────────
-            # Dùng Gemini để scan toàn video, tìm các đoạn có cảm xúc mạnh
-            # trước khi chạy pipeline AI tốn GPU. Giảm số clips cần xử lý.
-            if settings.GCP_PROJECT_ID and video_file_path and os.path.exists(video_file_path):
-                print("🤖 [Gemini] Bắt đầu pre-filtering với Gemini 2.5 Flash...")
+            # --- STAGE 2: AI AUTO-CUT (Vertex AI) HOẶC CLASSIC CUT ---
+            # Neu AI_AUTOCUT_ENABLED + Vertex AI san sang:
+            #   - Goi Gemini quet video -> FFmpeg cut truc tiep
+            #   - Bo qua smart_segmenter / scene_splitter
+            #   - Khong can gemini_prefilter o stage phu
+            #   - Clip status="needs_review", decision_by="gemini_autocut"
+            #   - Stage 3 (face/audio/transcribe/ensemble) van chay binh thuong
+            #
+            # Fallback (classic mode):
+            #   - SceneSplitter + SmartSegmenter + Gemini pre-filter rating
+            if settings.AI_AUTOCUT_ENABLED and self._vertex_ai_ready():
+                print("🤖 [AI AutoCut] Bat che do AI Auto-Cut (Vertex AI global)...")
                 if progress_callback:
-                    progress_callback("gemini_prefilter", 0, 100, "🤖 [Gemini] Đang phân tích video bằng Gemini...")
-                try:
-                    from backend.services.gemini_auto_labeler import GeminiAutoLabeler
-                    labeler = GeminiAutoLabeler()
-                    gem_result = labeler.analyze_video(
-                        video_path=video_file_path,
-                        intensity_threshold=settings.GEMINI_INTENSITY_THRESHOLD,
-                        max_segments=30,
+                    progress_callback("ai_autocut", 0, 100, "🤖 [AI AutoCut] Đang quét video bằng Vertex AI...")
+                clips_metadata = self._ai_autocut_stage(
+                    video_id=video_id,
+                    video_file_path=video_file_path,
+                    db=db,
+                    progress_callback=progress_callback,
+                )
+                total_clips = len(clips_metadata)
+                if total_clips == 0:
+                    print("⚠️ [AI AutoCut] Khong cat duoc clip nao -> fallback classic mode")
+                    if progress_callback:
+                        progress_callback("ai_autocut", 100, 100,
+                                         "⚠️ [AI AutoCut] 0 clip, fallback classic mode")
+                    clips_metadata = self._classic_cut_stage(
+                        video_file_path, video_id, scenes, progress_callback
                     )
-                    gem_segments = gem_result.get("segments", [])
-                    print(f"🤖 [Gemini] Tìm thấy {len(gem_segments)} đoạn cảm xúc mạnh (intensity ≥ {settings.GEMINI_INTENSITY_THRESHOLD})")
-                    if progress_callback:
-                        progress_callback("gemini_prefilter", 80, 100,
-                                         f"🤖 [Gemini] Tìm thấy {len(gem_segments)} đoạn cảm xúc mạnh")
-                    # Tag clips that fall within emotional segments
-                    for cm in clips_metadata:
-                        in_gem_segment = any(
-                            cm["start_time"] >= seg["start_time"] and cm["end_time"] <= seg["end_time"]
-                            for seg in gem_segments
-                        )
-                        cm["gem_intensity"] = max(
-                            (seg["intensity"] for seg in gem_segments
-                             if cm["start_time"] >= seg["start_time"] and cm["end_time"] <= seg["end_time"]),
-                            default=0.0
-                        )
-                        cm["in_gem_segment"] = in_gem_segment
-                    if progress_callback:
-                        progress_callback("gemini_prefilter", 100, 100,
-                                         f"🤖 [Gemini] Done. {len(gem_segments)} emotional segments found.")
-                except Exception as gem_err:
-                    print(f"⚠️ [Gemini] Pre-filtering bị lỗi, bỏ qua: {gem_err}")
-                    if progress_callback:
-                        progress_callback("gemini_prefilter", 100, 100,
-                                         f"⚠️ [Gemini] Bỏ qua: {gem_err}")
-                    for cm in clips_metadata:
-                        cm["gem_intensity"] = 0.0
-                        cm["in_gem_segment"] = False
+                    total_clips = len(clips_metadata)
+                # Cap nhat DB
+                video.total_clips = total_clips
+                video.processing_mode = "ai_autocut"
+                db.commit()
+                if progress_callback:
+                    progress_callback("scene_split", 100, 100,
+                                     f"🤖 [AI AutoCut] Hoàn tất: {total_clips} clip")
             else:
-                for cm in clips_metadata:
-                    cm["gem_intensity"] = 0.0
-                    cm["in_gem_segment"] = False
+                clips_metadata = self._classic_cut_stage(
+                    video_file_path, video_id, scenes, progress_callback
+                )
+                total_clips = len(clips_metadata)
+                # Cap nhat DB
+                video.total_clips = total_clips
+                db.commit()
+                print(f"✅ [Pipeline] Stage 2: Hoàn tất classic cut. Đã tạo ra {total_clips} clips hợp lệ")
+                if progress_callback:
+                    progress_callback("scene_split", 100, 100,
+                                     f"✂️ [Scene Split] Hoàn tất. Đã tạo ra {total_clips} clips hợp lệ")
 
             # --- STAGES 3 & 4: MULTI-TRACK PROCESSING & MULTI-MODEL LABELING ---
             
@@ -653,3 +659,329 @@ class PipelineOrchestrator:
                 total,
                 f"🔧 [Feature] Hoàn tất: {success_count}/{total} clips có features",
             )
+
+    # ── Stage 2 helpers: AI AutoCut + Classic Cut ──────────
+
+    def _vertex_ai_ready(self) -> bool:
+        """Kiem tra Vertex AI (credentials + global location) san sang."""
+        try:
+            from backend.services.gemini_auto_labeler import is_vertex_configured
+            ok, _ = is_vertex_configured()
+            return ok
+        except Exception:
+            return False
+
+    # ── Sprint 3 — YouTube URL handling ────────────────────────────────
+
+    # Gioi han duration toi da cho AI Auto-Cut (30 phut). Neu video YouTube
+    # qua dai → cat truoc 30 phut dau, hoac fallback classic mode.
+    AI_AUTOCUT_MAX_DURATION_SEC = 30 * 60
+
+    def download_youtube_for_ai_autocut(
+        self,
+        url: str,
+        progress_callback=None,
+        max_duration_sec: float | None = None,
+    ) -> dict[str, Any]:
+        """Download YouTube video cho AI Auto-Cut.
+
+        Differences so voi self.downloader.download():
+        1. Gioi han duration: neu > max_duration_sec → cat 30 phut dau bang FFmpeg
+           hoac skip voi warning.
+        2. Cleanup on failure: neu Gemini call fail sau, file se duoc don dep.
+        3. Force mp4 output de Vertex AI native video input hoat dong tot.
+
+        Args:
+            url: YouTube URL.
+            progress_callback: callable (stage, cur, total, msg).
+            max_duration_sec: cap duration (mac dinh = self.AI_AUTOCUT_MAX_DURATION_SEC).
+
+        Returns:
+            dict gom: file_path, duration_sec, resolution, title, video_id,
+            was_truncated (True neu bi cat), truncated_duration_sec.
+
+        Raises:
+            ValueError: neu URL khong hop le.
+            RuntimeError: neu download fail.
+        """
+        from backend.services.downloader import VideoDownloader
+        from backend.config import settings
+
+        if not VideoDownloader.is_valid_url(url):
+            raise ValueError(f"URL khong hop le: {url}")
+
+        max_dur = max_duration_sec or self.AI_AUTOCUT_MAX_DURATION_SEC
+
+        # Stage 1: Get info (cache)
+        info = self.downloader.get_video_info(url)
+        title = info.get("title", "Unknown")
+        raw_duration = float(info.get("duration_sec", 0))
+
+        was_truncated = False
+        truncated_duration_sec = raw_duration
+        if raw_duration > max_dur:
+            print(
+                f"⚠️ [YouTube-AI] Video {raw_duration:.0f}s > {max_dur:.0f}s cap. "
+                f"Se chi xu ly {max_dur:.0f}s dau."
+            )
+            was_truncated = True
+            truncated_duration_sec = max_dur
+
+        if progress_callback:
+            progress_callback("download", 0, 100,
+                              f"📥 [YouTube] Bắt đầu tải: {title} ({raw_duration:.0f}s)")
+
+        # Stage 2: Download (reuse downloader)
+        download_res = self.downloader.download(url, progress_hook=None)
+        downloaded_path = download_res["file_path"]
+
+        # Stage 3: Neu bi truncate → FFmpeg cat phan dau
+        if was_truncated:
+            try:
+                clipped_path = self._clip_video_ffmpeg(
+                    downloaded_path, duration_sec=max_dur
+                )
+                download_res["file_path"] = clipped_path
+                download_res["duration_sec"] = max_dur
+                download_res["was_truncated"] = True
+                download_res["truncated_duration_sec"] = max_dur
+            except Exception as exc:
+                print(f"⚠️ [YouTube-AI] truncate fail: {exc}, dung full file")
+                download_res["was_truncated"] = False
+
+        download_res["title"] = title
+        download_res["video_id"] = info.get("id", "")
+        return download_res
+
+    def _clip_video_ffmpeg(self, source_path: str, duration_sec: float) -> str:
+        """Cat phan dau video bang FFmpeg, ghi ra file _clipped.mp4."""
+        import subprocess
+        from pathlib import Path
+
+        src = Path(source_path)
+        out = src.parent / f"{src.stem}_clipped.mp4"
+        ffmpeg = settings.FFMPEG_PATH or "ffmpeg"
+        cmd = [
+            ffmpeg, "-y",
+            "-i", str(src),
+            "-t", str(duration_sec),
+            "-c", "copy",     # stream copy, khong re-encode → rat nhanh
+            "-avoid_negative_ts", "make_zero",
+            str(out),
+        ]
+        subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+        return str(out)
+
+    def _ai_autocut_stage(
+        self,
+        video_id: str,
+        video_file_path: str,
+        db: Session,
+        progress_callback=None,
+    ) -> list[dict]:
+        """
+        Stage 2 (AI AutoCut): quet video bang Vertex AI + FFmpeg cat truc tiep.
+        Tra ve list clips_metadata (dict) giong format SceneSplitter de stage 3
+        xu ly tiep (face/audio/transcribe/ensemble/feature).
+
+        Sprint 3 — Stage 4 (Verify pass):
+        Sau khi FFmpeg cat xong, moi clip duoc gui lai cho Gemini Verify de
+        xac minh emotion + face/audio quality. Clips bi reject (unstable /
+        low_quality / emotion_flip) bi loai khoi output neu AI_AUTOCUT_VERIFY_STRICT.
+        """
+        from backend.services.ai_video_segmenter import AIVideoSegmenter
+        from backend.config import settings as _cfg
+
+        segmenter = AIVideoSegmenter()
+        result = segmenter.cut_video(
+            video_path=video_file_path,
+            video_id=str(video_id),
+            progress_callback=progress_callback,
+        )
+        # Persist Clip records ngay (decision_by="gemini_autocut")
+        try:
+            segmenter.persist_clips(result, db)
+        except Exception as exc:
+            print(f"⚠️ [AI AutoCut] persist_clips loi: {exc}")
+
+        # ── Stage 4 — Verify pass ──────────────────────────────────
+        # Sprint 3: Verify tung clip da cat. Merge verdict voi Stage 2.
+        verify_summary = {
+            "total": len(result.clips),
+            "passed": 0,
+            "rejected": 0,
+            "errors": 0,
+            "by_verdict": {},
+        }
+        if result.clips:
+            print(f"🔍 [Verify] Dang verify {len(result.clips)} clip bang Gemini...")
+            if progress_callback:
+                progress_callback("ai_verify", 0, len(result.clips),
+                                  f"🔍 [Verify] Bắt đầu Verify pass cho {len(result.clips)} clip...")
+            for v_idx, seg in enumerate(list(result.clips)):
+                try:
+                    v_res = segmenter.verify_clip(
+                        clip_path=seg.clip_path,
+                        predicted_emotion=seg.emotion,
+                        predicted_intensity=seg.intensity,
+                        transcript="",  # Transcriber chưa chạy ở giai đoạn này
+                        audio_features=None,
+                        face_stats=None,
+                    )
+                    seg_dict = {
+                        "emotion": seg.emotion,
+                        "intensity": seg.intensity,
+                    }
+                    merged = segmenter.combine_verdicts(seg_dict, v_res)
+                    # Cap nhat AutoCutSegment
+                    seg.verify_verdict = merged.get("verify_verdict", v_res.get("verdict", ""))
+                    seg.verify_status = merged.get("verify_status", "passed")
+                    seg.verify_reasoning = merged.get("verify_reasoning", v_res.get("reasoning", ""))
+                    seg.rejected_by_verify = merged.get("rejected_by_verify", False)
+                    seg.reject_reason = merged.get("reject_reason", "")
+                    seg.emotion = merged.get("emotion", seg.emotion)
+                    seg.intensity = merged.get("intensity", seg.intensity)
+
+                    verdict = seg.verify_verdict or v_res.get("verdict", "")
+                    verify_summary["by_verdict"][verdict] = (
+                        verify_summary["by_verdict"].get(verdict, 0) + 1
+                    )
+                    if seg.verify_status == "passed":
+                        verify_summary["passed"] += 1
+                    elif seg.verify_status == "rejected":
+                        verify_summary["rejected"] += 1
+                    if v_res.get("error"):
+                        verify_summary["errors"] += 1
+                except Exception as exc:
+                    print(f"⚠️ [Verify] clip {v_idx} loi: {exc}")
+                    verify_summary["errors"] += 1
+                    seg.verify_verdict = "stats_mismatch"
+                    seg.verify_status = "passed"  # mac dinh giu neu loi
+                    seg.verify_reasoning = f"verify_exception: {exc}"
+
+                if progress_callback:
+                    progress_callback("ai_verify", v_idx + 1, len(result.clips),
+                                      f"🔍 [Verify] {v_idx + 1}/{len(result.clips)} clip")
+
+            # Sprint 3 — Strict mode: loai clip bi Verify reject
+            if _cfg.AI_AUTOCUT_VERIFY_STRICT:
+                before = len(result.clips)
+                result.clips = [s for s in result.clips if not s.rejected_by_verify]
+                print(
+                    f"🚫 [Verify] strict mode: loai {before - len(result.clips)} clip rejected, "
+                    f"giu {len(result.clips)}"
+                )
+
+            # Commit lai DB neu co rejected_by_verify thay doi
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        result.verify_summary = verify_summary
+        result.stage4_verified = verify_summary["total"]
+
+        # Convert AutoCutSegment -> dict giong format StageSplitter
+        clips_metadata: list[dict] = []
+        for idx, seg in enumerate(result.clips):
+            clips_metadata.append({
+                "clip_index": idx,
+                "clip_id": seg.clip_id,
+                "start_time": seg.start_time,
+                "end_time": seg.end_time,
+                "duration": seg.end_time - seg.start_time,
+                "clip_path": seg.clip_path,
+                "segment_metadata": {
+                    "source": "ai_autocut",
+                    "emotion": seg.emotion,
+                    "intensity": seg.intensity,
+                    "face_coverage": seg.face_coverage,
+                    "subject": seg.subject,
+                    "reasoning": seg.reasoning,
+                    "verify_verdict": seg.verify_verdict,
+                    "verify_status": seg.verify_status,
+                    "verify_reasoning": seg.verify_reasoning,
+                    "rejected_by_verify": seg.rejected_by_verify,
+                    "reject_reason": seg.reject_reason,
+                },
+                "gem_intensity": seg.intensity,
+                "in_gem_segment": True,
+            })
+
+        # Video metadata
+        try:
+            video = db.query(Video).filter(Video.id == video_id).first()
+            if video:
+                video.target_emotion = "ai_autocut"
+                rejected_count = verify_summary.get("rejected", 0)
+                error_msg = (
+                    f"AI AutoCut: {result.total_segments} clips "
+                    f"(Verify: {verify_summary['passed']} passed, "
+                    f"{rejected_count} rejected, "
+                    f"{verify_summary['errors']} errors), "
+                    f"cost ${result.total_cost_usd:.4f}, source={result.source}"
+                )
+                video.error_msg = error_msg
+                db.commit()
+        except Exception:
+            db.rollback()
+
+        return clips_metadata
+
+    def _classic_cut_stage(
+        self,
+        video_file_path: str,
+        video_id: str,
+        scenes: list[dict],
+        progress_callback,
+    ) -> list[dict]:
+        """
+        Stage 2 (classic): SceneSplitter + SmartSegmenter fallback + Gemini pre-filter.
+        """
+        from backend.services.gemini_auto_labeler import GeminiAutoLabeler
+
+        scenes_for_split = getattr(self, "_scenes_for_split", scenes) or scenes
+        print(f"✂️ [Pipeline] Classic cut: {len(scenes_for_split)} candidates")
+        if progress_callback:
+            progress_callback(
+                "scene_split", 70, 100,
+                f"✂️ [Classic] FFmpeg cắt {len(scenes_for_split)} candidate..."
+            )
+
+        clips_metadata = self.splitter.split_video(
+            video_file_path,
+            scenes_for_split,
+            video_id,
+            min_duration=settings.MIN_CLIP_DURATION,
+            max_duration=settings.MAX_CLIP_DURATION,
+        )
+
+        # Gemini pre-filter (optional rating)
+        for cm in clips_metadata:
+            cm.setdefault("gem_intensity", 0.0)
+            cm.setdefault("in_gem_segment", False)
+            cm.setdefault("segment_metadata", {})
+
+        if settings.GCP_PROJECT_ID or os.getenv("GEMINI_API_KEY"):
+            try:
+                labeler = GeminiAutoLabeler()
+                gem_result = labeler.analyze_video(
+                    video_path=video_file_path,
+                    intensity_threshold=settings.GEMINI_INTENSITY_THRESHOLD,
+                    max_segments=30,
+                )
+                gem_segments = gem_result.get("segments", [])
+                for cm in clips_metadata:
+                    cm["gem_intensity"] = max(
+                        (seg["intensity"] for seg in gem_segments
+                         if cm["start_time"] >= seg["start_time"] and cm["end_time"] <= seg["end_time"]),
+                        default=0.0,
+                    )
+                    cm["in_gem_segment"] = any(
+                        cm["start_time"] >= seg["start_time"] and cm["end_time"] <= seg["end_time"]
+                        for seg in gem_segments
+                    )
+            except Exception as gem_err:
+                print(f"⚠️ [Gemini] Pre-filter classic skip: {gem_err}")
+
+        return clips_metadata

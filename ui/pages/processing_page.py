@@ -27,6 +27,15 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
+from ui.styles.theme import Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
+
 
 class CheckRow(QFrame):
     """One preflight check row."""
@@ -139,13 +148,14 @@ class ProcessingPage(QWidget):
     STAGES = [
         ("queued",        "HÀNG ĐỢI",  "Xếp hàng"),
         ("download",      "TẢI XUỐNG", "Tải video / Nguồn cục bộ"),
-        ("scene_split",   "CẢNH",      "Phân tích cảnh"),
+        ("ai_autocut",    "AI CUT",    "Vertex AI quét + cắt tự động"),
+        ("scene_split",   "CẢNH",      "Phân tích cảnh (classic)"),
         ("prewarm",       "MÔ HÌNH",    "Khởi động AI"),
         ("face_detect",   "KHUÔN MẶT",  "Phát hiện khuôn mặt"),
         ("audio_extract", "ÂM THANH",   "Trích xuất âm thanh"),
-        ("transcribe",    "LỚI NÓI",    "Nhận dạng giọng nói"),
+        ("transcribe",    "LỜI NÓI",    "Nhận dạng giọng nói"),
         ("emotion_label", "CẢM XÚC",   "Phân tích cảm xúc AI"),
-        ("quality_score", "CHẤT LƯợNG", "Chấm điểm chất lượng"),
+        ("quality_score", "CHẤT LƯỢNG", "Chấm điểm chất lượng"),
     ]
 
     def __init__(self, parent=None):
@@ -170,15 +180,24 @@ class ProcessingPage(QWidget):
         scroll_content = QWidget()
         scroll.setWidget(scroll_content)
         self.main_layout = QVBoxLayout(scroll_content)
-        self.main_layout.setContentsMargins(32, 24, 32, 24)
-        self.main_layout.setSpacing(18)
+        self.main_layout.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        self.main_layout.setSpacing(Spacing.LG)
 
-        self.title_label = QLabel("Giám Sát Xử Lý")
-        self.title_label.setObjectName("pageTitle")
-        self.main_layout.addWidget(self.title_label)
+        # Hero header
+        self.header = PageHeader(
+            "Giám Sát Xử Lý",
+            "Theo dõi preflight, tiến độ pipeline, log và tài nguyên theo thời gian thực.",
+            icon="fa5s.cogs",
+        )
+        self.main_layout.addWidget(self.header)
 
-        self.subtitle_label = QLabel("Chưa có tác vụ xử lý nào. Hãy khởi động từ Bảng Điều Khiển.")
-        self.subtitle_label.setObjectName("pageSubtitle")
+        # Subtitle label (thay thế cho subtitle_label cũ)
+        self.subtitle_label = QLabel("Chưa có tác vụ nào — khởi động từ Bảng Điều Khiển.")
+        self.subtitle_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; background: transparent;"
+            f" font-size: 13px; padding: 4px 4px 8px 4px;"
+        )
+        self.subtitle_label.setWordWrap(True)
         self.main_layout.addWidget(self.subtitle_label)
 
         self._build_preflight_card()
@@ -207,11 +226,11 @@ class ProcessingPage(QWidget):
         title = QLabel("GPU Workers (Colab)")
         title.setObjectName("sectionTitle")
         header.addWidget(title)
-        self.worker_status_label = QLabel("⏸ Chưa kết nối")
-        self.worker_status_label.setObjectName("mutedText")
+        self.worker_status_label = StatusPill("muted", "Chưa kết nối")
         header.addWidget(self.worker_status_label)
-        refresh_btn = QPushButton("⟳")
-        refresh_btn.setFixedSize(28, 28)
+        refresh_btn = ActionButton("", "fa5s.sync-alt", variant="ghost")
+        refresh_btn.setFixedSize(36, 36)
+        refresh_btn.setToolTip("Làm mới trạng thái worker")
         refresh_btn.clicked.connect(self._refresh_worker_status)
         header.addWidget(refresh_btn)
         layout.addLayout(header)
@@ -238,7 +257,7 @@ class ProcessingPage(QWidget):
 
             if workers:
                 w = workers[0]
-                self.worker_status_label.setText(f"✅ {w.get('gpu_name', 'GPU')}")
+                self.worker_status_label.set_status("success", w.get('gpu_name', 'GPU'))
                 self.worker_info_label.setText(
                     f"Worker: {w.get('worker_id', '?')} | "
                     f"GPU: {w.get('gpu_name', '?')} ({w.get('gpu_memory_gb', 0):.0f}GB) | "
@@ -246,13 +265,13 @@ class ProcessingPage(QWidget):
                 )
                 self._worker_poll_timer.start(15000)
             else:
-                self.worker_status_label.setText("⏸ Idle")
+                self.worker_status_label.set_status("muted", "Idle")
                 self.worker_info_label.setText(
                     f"Không có worker kết nối | "
                     f"Queue: {queue.get('queued', 0)} queued, {queue.get('running', 0)} running"
                 )
         except Exception:
-            self.worker_status_label.setText("⚠️ Backend offline")
+            self.worker_status_label.set_status("warning", "Backend offline")
             self.worker_info_label.setText("Local backend không chạy. Chạy: python backend/main.py")
 
     def _build_preflight_card(self):
@@ -335,23 +354,19 @@ class ProcessingPage(QWidget):
 
     def _build_controls(self):
         row = QHBoxLayout()
-        row.setSpacing(12)
-        self.cancel_btn = QPushButton("Hủy tác vụ")
-        self.cancel_btn.setObjectName("dangerBtn")
+        row.setSpacing(Spacing.SM)
+        self.cancel_btn = ActionButton("Hủy tác vụ", "fa5s.stop", variant="danger")
         self.cancel_btn.setEnabled(False)
-        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_btn.clicked.connect(self._on_cancel)
         row.addWidget(self.cancel_btn)
 
-        self.clear_log_btn = QPushButton("Xóa nhật ký")
-        self.clear_log_btn.setObjectName("ghostBtn")
+        self.clear_log_btn = ActionButton("Xóa nhật ký", "fa5s.eraser", variant="ghost")
         self.clear_log_btn.clicked.connect(lambda: self.log_viewer.clear())
         row.addWidget(self.clear_log_btn)
 
         row.addStretch()
-        self.view_results_btn = QPushButton("Xem kết quả")
+        self.view_results_btn = ActionButton("Xem kết quả", "fa5s.arrow-right", variant="primary")
         self.view_results_btn.setEnabled(False)
-        self.view_results_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         row.addWidget(self.view_results_btn)
         self.main_layout.addLayout(row)
 

@@ -69,6 +69,7 @@ class SmartSegmenter:
         max_dialogue_extension: float = 1.5,
         vad_mode: str = "energy",
         metadata_dir: Path | None = None,
+        min_face_coverage_in_scene: float | None = None,
     ):
         self.face_scan_fps = face_scan_fps
         self.face_confidence = face_confidence
@@ -84,6 +85,10 @@ class SmartSegmenter:
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         self._cascade = self._load_haar_cascade()
         self._mp_detector = self._init_mediapipe_detector()
+        # Sprint 2: nguong Smart pre-cut. Neu None thi lay tu settings.AI_AUTOCUT_MIN_FACE_COVERAGE_IN_SCENE
+        if min_face_coverage_in_scene is None:
+            min_face_coverage_in_scene = float(getattr(settings, "AI_AUTOCUT_MIN_FACE_COVERAGE_IN_SCENE", 0.70))
+        self.min_face_coverage_in_scene = float(min_face_coverage_in_scene)
 
     def build_segments(self, video_path: str, scenes: list[dict], video_id: str | None = None) -> list[dict]:
         if not Path(video_path).exists():
@@ -126,6 +131,20 @@ class SmartSegmenter:
                     face_cov = self._coverage_from_samples((start, end), samples)
                     avg_faces = self._avg_faces((start, end), samples)
                     quality_hint = self._quality_hint(face_cov, speech_cov, duration)
+
+                    # Sprint 2 — Smart pre-cut: loc segment face_coverage thap (<0.70 mac dinh)
+                    # Tru khi dialogue rat tot (speech_cov >= 0.6) → giu lai lam review
+                    skip_face_coverage = (
+                        face_cov < self.min_face_coverage_in_scene
+                        and speech_cov < 0.6
+                    )
+                    if skip_face_coverage:
+                        logger.debug(
+                            f"[SmartCut] skip {start:.2f}-{end:.2f}: face_cov={face_cov:.2f} < "
+                            f"{self.min_face_coverage_in_scene:.2f} (speech_cov={speech_cov:.2f})"
+                        )
+                        continue
+
                     candidates.append(SegmentCandidate(
                         scene_index=scene_index,
                         start_time=round(start, 3),
@@ -138,7 +157,12 @@ class SmartSegmenter:
                         has_dialogue=speech_cov > 0.15,
                         cut_reason="face_run_refined_by_dialogue" if speech_cov > 0 else "face_run",
                         quality_hint=quality_hint,
-                        metadata={"raw_face_coverage": face_coverage, "raw_num_faces_avg": num_faces_avg},
+                        metadata={
+                            "raw_face_coverage": face_coverage,
+                            "raw_num_faces_avg": num_faces_avg,
+                            "min_face_coverage_threshold": self.min_face_coverage_in_scene,
+                            "skipped_strict": skip_face_coverage,
+                        },
                     ))
 
         merged = self._dedupe_and_sort(candidates)

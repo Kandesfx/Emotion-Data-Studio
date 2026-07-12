@@ -2,8 +2,12 @@
 # Emotion Data Studio — .gitignore
 # ============================================================
 
-# Data & Database
+# Data & Database — IGNORE TOÀN BỘ data/
+# Lý do: project này generate ra rất nhiều data (faces, cache, scripts,
+# annotations, project_state.json, studio.db) không bao giờ commit.
+data/
 data/*.db
+data/*.json
 data/videos/
 data/clips/
 data/frames/
@@ -11,6 +15,17 @@ data/audio/
 data/transcripts/
 data/exports/
 data/models_cache/
+data/faces/         # Sprint 5 — face crops from face_extractor (PII risk)
+data/faces/**       # Sprint 5 — recursive ignore for face crops
+data/cache/         # Sprint 5 — Gemini response cache (gitignored)
+data/cache/**       # Sprint 5 — recursive ignore
+data/scripts/       # Sprint 5 — ad-hoc test scripts (e.g. test_e2e_bongma.py)
+data/scripts/**     # Sprint 5 — recursive ignore
+data/annotations/   # Sprint 5 — annotation outputs
+data/annotations/** # Sprint 5 — recursive ignore
+data/project_state.json
+data/user_settings.json
+data/studio.db
 
 # Logs
 logs/
@@ -48,3 +63,17 @@ desktop.ini
 
 # Temporary
 *.tmp
+
+# === Credentials & Secrets (project-specific belt-and-suspenders) ===
+# Root .gitignore cũng có pattern này, nhưng thêm ở đây để defense-in-depth
+# trong trường hợp root .gitignore bị mất hoặc pattern bị xung đột.
+service-account-key.json
+*service-account*.json
+credentials*.json
+aura-*.json
+*-*-e7a*.json
+gcp-credentials.json
+gcloud-credentials.json
+
+# Allow intentional commits to override (use: git add -f <file>)
+!service-account-key.example.json

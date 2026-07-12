@@ -38,6 +38,14 @@ from PySide6.QtWidgets import (
 )
 
 from ui.widgets.custom_spinbox import FocusDoubleSpinBox
+from ui.styles.theme import Colors, Spacing
+from ui.widgets import PageHeader, Card, ActionButton, StatusPill
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except ImportError:
+    _HAS_QTA = False
 
 
 class TimelineWidget(QWidget):
@@ -166,15 +174,18 @@ class SegmentEditorPage(QWidget):
         content = QWidget()
         scroll.setWidget(content)
         self.content_layout = QVBoxLayout(content)
-        self.content_layout.setContentsMargins(24, 16, 24, 16)
-        self.content_layout.setSpacing(16)
+        self.content_layout.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        self.content_layout.setSpacing(Spacing.LG)
 
-        self.title_label = QLabel("Trình Soạn Phân Đoạn")
-        self.title_label.setObjectName("pageTitle")
-        self.content_layout.addWidget(self.title_label)
-        self.subtitle_label = QLabel("Tải video từ máy, tạo các phân đoạn, sau đó tiến hành xử lý.")
-        self.subtitle_label.setObjectName("pageSubtitle")
-        self.content_layout.addWidget(self.subtitle_label)
+        # Hero header
+        header = PageHeader(
+            "Trình Soạn Phân Đoạn",
+            "Tải video từ máy, tạo và chỉnh sửa các phân đoạn, sau đó tiến hành xử lý.",
+            icon="fa5s.cut",
+        )
+        self.editor_pill = StatusPill("muted", "Chưa tải video")
+        header.set_right_widget(self.editor_pill)
+        self.content_layout.addWidget(header)
 
         self._build_source_card()
         self._build_preview_card()
@@ -195,8 +206,7 @@ class SegmentEditorPage(QWidget):
         self.mode_combo.addItems(["semi_auto", "manual"])
         self.mode_combo.setToolTip("semi_auto: chạy AI sau khi cắt; manual: chỉ cắt clip để kiểm duyệt thủ công")
         layout.addWidget(self.mode_combo)
-        load_btn = QPushButton("Tải Video Từ Máy")
-        load_btn.setObjectName("primaryBtn")
+        load_btn = ActionButton("Tải Video Từ Máy", "fa5s.file-video", variant="primary")
         load_btn.clicked.connect(self._choose_video)
         layout.addWidget(load_btn)
         self.content_layout.addWidget(card)
@@ -224,15 +234,18 @@ class SegmentEditorPage(QWidget):
         layout.addWidget(self.timeline)
 
         controls = QHBoxLayout()
-        self.play_btn = QPushButton("Phát")
+        controls.setSpacing(Spacing.SM)
+        self.play_btn = ActionButton("", "fa5s.play", variant="primary")
+        self.play_btn.setToolTip("Phát / Dừng (Space)")
+        self.play_btn.setFixedWidth(40)
         self.play_btn.clicked.connect(self._toggle_play)
         controls.addWidget(self.play_btn)
         self.time_label = QLabel("00:00 / 00:00")
-        self.time_label.setObjectName("mutedText")
+        self.time_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent;")
         controls.addWidget(self.time_label)
         controls.addStretch()
         for label, rate in [("0.5x", 0.5), ("1x", 1.0), ("2x", 2.0)]:
-            btn = QPushButton(label)
+            btn = ActionButton(label, "", variant="ghost")
             btn.clicked.connect(lambda checked=False, r=rate: self.media_player.setPlaybackRate(r))
             controls.addWidget(btn)
         layout.addLayout(controls)
@@ -247,21 +260,21 @@ class SegmentEditorPage(QWidget):
         layout.addWidget(title)
 
         row = QHBoxLayout()
-        self.set_start_btn = QPushButton("Đặt Bắt Đầu (S)")
+        row.setSpacing(Spacing.SM)
+        self.set_start_btn = ActionButton("Đặt Bắt Đầu (S)", "fa5s.play", variant="secondary")
         self.set_start_btn.clicked.connect(self._set_start)
         row.addWidget(self.set_start_btn)
-        self.set_end_btn = QPushButton("Đặt Kết Thúc & Thêm (E)")
-        self.set_end_btn.setObjectName("successBtn")
+        self.set_end_btn = ActionButton("Đặt Kết Thúc & Thêm (E)", "fa5s.plus", variant="primary")
         self.set_end_btn.setEnabled(False)
         self.set_end_btn.clicked.connect(self._set_end)
         row.addWidget(self.set_end_btn)
-        cancel_btn = QPushButton("Huỷ Đánh Dấu")
+        cancel_btn = ActionButton("Huỷ Đánh Dấu", "fa5s.times", variant="ghost")
         cancel_btn.clicked.connect(self._cancel_pending)
         row.addWidget(cancel_btn)
-        self.split_btn = QPushButton("Tách Phân Đoạn Tại Điểm Phát")
+        self.split_btn = ActionButton("Tách tại điểm phát", "fa5s.cut", variant="secondary")
         self.split_btn.clicked.connect(self._split_selected)
         row.addWidget(self.split_btn)
-        self.merge_btn = QPushButton("Gộp Các Phân Đoạn Đang Chọn")
+        self.merge_btn = ActionButton("Gộp đang chọn", "fa5s.compress-arrows-alt", variant="secondary")
         self.merge_btn.clicked.connect(self._merge_selected)
         row.addWidget(self.merge_btn)
         layout.addLayout(row)
@@ -324,19 +337,17 @@ class SegmentEditorPage(QWidget):
         self.content_layout.addWidget(card)
 
     def _build_action_bar(self):
-        card = QFrame()
-        card.setObjectName("cardElevated")
-        layout = QHBoxLayout(card)
+        card = Card("elevated")
+        layout = card._layout
         self.mode_label = QLabel("Chế độ: semi_auto")
-        self.mode_label.setObjectName("accentText")
+        self.mode_label.setStyleSheet(f"color: {Colors.ACCENT_LIGHT}; background: transparent;")
         layout.addWidget(self.mode_label)
         layout.addStretch()
         self.process_progress = QProgressBar()
         self.process_progress.setVisible(False)
         self.process_progress.setFixedWidth(220)
         layout.addWidget(self.process_progress)
-        self.confirm_btn = QPushButton("Xác Nhận & Tiến Hành Xử Lý")
-        self.confirm_btn.setObjectName("primaryBtn")
+        self.confirm_btn = ActionButton("Xác Nhận & Tiến Hành Xử Lý", "fa5s.check-double", variant="primary")
         self.confirm_btn.clicked.connect(self._on_confirm)
         layout.addWidget(self.confirm_btn)
         self.content_layout.addWidget(card)
