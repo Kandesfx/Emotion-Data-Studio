@@ -10,33 +10,44 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import torch
-from transformers import AutoModel, AutoTokenizer
 
 MAX_SEQ_LEN = 50
 TEXT_DIM = 768
 
 
 class TextFeatureExtractor:
+    """Lazily imports torch/transformers so this module can be imported (e.g. by
+    pipeline_orchestrator) without those heavy deps installed — only actual
+    feature extraction needs them."""
+
     def __init__(self, output_dir: Path | None = None, device: str | None = None):
         self.output_dir = output_dir
         self._tokenizer: Any = None
         self._model: Any = None
+        self._device_override = device
+        self._device: str | None = None
 
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
+    @property
+    def device(self) -> str:
+        if self._device is None:
+            if self._device_override is not None:
+                self._device = self._device_override
+            else:
+                import torch
+                self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        return self._device
 
     @property
     def tokenizer(self):
         if self._tokenizer is None:
+            from transformers import AutoTokenizer
             self._tokenizer = AutoTokenizer.from_pretrained("vinai/PhoBERT-base")
         return self._tokenizer
 
     @property
     def model(self):
         if self._model is None:
+            from transformers import AutoModel
             self._model = AutoModel.from_pretrained("vinai/PhoBERT-base")
             self._model.to(self.device)
             self._model.eval()
@@ -113,6 +124,8 @@ class TextFeatureExtractor:
 
     def _encode_words(self, word_texts: list[str]) -> np.ndarray:
         """Encode each word via PhoBERT subword aggregation (mean pooling)."""
+        import torch
+
         tokenizer = self.tokenizer
         model = self.model
         embeddings: list[np.ndarray] = []

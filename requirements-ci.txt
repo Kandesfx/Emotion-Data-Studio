@@ -19,3 +19,19 @@ PySide6>=6.7.0
 # Used by ai_video_segmenter for response_schema typing (optional import,
 # tests should still pass if missing — guarded by try/except)
 google-genai>=1.0.0
+
+# ai_video_segmenter imports sqlalchemy.orm.Session at module load time,
+# and gemini_api / review_queue_agent import backend.database models.
+sqlalchemy>=2.0.0
+
+# pipeline_orchestrator imports (at module load time) scene_splitter,
+# smart_segmenter, face_extractor, downloader and the feature_extractors,
+# which pull in these lightweight deps. torch/transformers are NOT needed
+# since text_feature_extractor now lazy-imports them.
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+scenedetect>=0.6.2
+yt-dlp>=2024.1.0
+
+# backend.api.gemini_api (imported by verify_integration_imports) needs fastapi.
+fastapi>=0.110.0
