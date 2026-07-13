@@ -30,10 +30,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: tools/emotion-data-studio/requirements-ci.txt
+          cache-dependency-path: requirements-ci.txt
 
       - name: Install CI dependencies
-        working-directory: tools/emotion-data-studio
         run: |
           python -m pip install --upgrade pip
           # Install a minimal subset — torch/whisper not needed for these checks.
@@ -41,43 +40,37 @@ jobs:
           pip install -r requirements-ci.txt
 
       - name: Verify module imports (10 assertions)
-        working-directory: tools/emotion-data-studio
+        id: verify-imports
         run: |
           python scripts/verify_integration_imports.py
 
       - name: Run Sprint 1 unit tests (hard filter + JSON schema)
-        working-directory: tools/emotion-data-studio
+        id: sprint1
         env:
           PYTHONIOENCODING: utf-8
         run: |
-          if [ -f tests/test_sprint1_autocut.py ]; then
-            python tests/test_sprint1_autocut.py
-          else
-            echo "::warning::test_sprint1_autocut.py not present, skipping"
-          fi
+          python tests/test_sprint1_autocut.py
 
       - name: Run Sprint 2 unit tests (verify pass + emotion lock)
-        working-directory: tools/emotion-data-studio
+        id: sprint2
         env:
           PYTHONIOENCODING: utf-8
         run: |
           python tests/test_sprint2_autocut.py
 
       - name: Run Sprint 3 unit tests (cache + cost + YouTube handler)
-        working-directory: tools/emotion-data-studio
+        id: sprint3
         env:
           PYTHONIOENCODING: utf-8
         run: |
           python tests/test_sprint3_autocut.py
 
       - name: Run Sprint 4 unit tests (review queue agent)
-        working-directory: tools/emotion-data-studio
+        id: sprint4
         env:
           PYTHONIOENCODING: utf-8
         run: |
-          # Sprint 4 test lives in repo root /tests/ and reads backend.config
-          # from PYTHONPATH. CI sets it explicitly to keep tests self-contained.
-          PYTHONPATH=. python ../../tests/test_review_queue_agent.py
+          python tests/test_review_queue_agent.py
 
       - name: Summarize
         if: always()
@@ -87,4 +80,5 @@ jobs:
           echo "Sprint 1: ${{ steps.sprint1.outcome }}"
           echo "Sprint 2: ${{ steps.sprint2.outcome }}"
           echo "Sprint 3: ${{ steps.sprint3.outcome }}"
+          echo "Sprint 4: ${{ steps.sprint4.outcome }}"
           echo "::endgroup::"
